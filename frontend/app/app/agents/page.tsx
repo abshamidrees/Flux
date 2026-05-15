@@ -117,18 +117,18 @@ export default function AgentsPage() {
     query: { enabled: !!FLUX_ADDRESS },
   });
 
-  useWatchContractEvent({
-    address: FLUX_ADDRESS as `0x${string}`,
-    abi: FLUX_ABI,
-    eventName: "AgentPayment",
-    onLogs: (logs) => {
-      const items = logs.map(l => ({
-        agent: (l as any).args.agent, recipient: (l as any).args.recipient,
-        amount: (l as any).args.amount, txHash: l.transactionHash,
-      }));
-      setPayments(prev => [...items, ...prev].slice(0, 100));
-    },
-  });
+  // useWatchContractEvent({
+  //   address: FLUX_ADDRESS as `0x${string}`,
+  //   abi: FLUX_ABI,
+  //   eventName: "AgentPayment",
+  //   onLogs: (logs) => {
+  //     const items = logs.map(l => ({
+  //       agent: (l as any).args.agent, recipient: (l as any).args.recipient,
+  //       amount: (l as any).args.amount, txHash: l.transactionHash,
+  //     }));
+  //     setPayments(prev => [...items, ...prev].slice(0, 100));
+  //   },
+  // });
 
   /* ── Validate using value refs at click time ── */
   const handleRegisterClick = () => {
