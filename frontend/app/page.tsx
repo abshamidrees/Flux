@@ -82,8 +82,8 @@ function Nav() {
             background: "#0f766e", textDecoration: "none", transition: "all 0.2s",
             boxShadow: "0 2px 14px rgba(15,118,110,0.3)",
           }}
-            onMouseEnter={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0d6460"; el.style.transform = "translateY(-1px)"; }}
-            onMouseLeave={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0f766e"; el.style.transform = "none"; }}
+            // onMouseEnter={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0d6460"; el.style.transform = "translateY(-1px)"; }}
+            // onMouseLeave={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0f766e"; el.style.transform = "none"; }}
           >
             Get Started <Arrow size={14} color="#fff" />
           </AppLink>
