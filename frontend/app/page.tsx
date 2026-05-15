@@ -213,8 +213,8 @@ export default function Landing() {
                   background: "#0f766e", textDecoration: "none", transition: "all 0.2s",
                   boxShadow: "0 4px 20px rgba(15,118,110,0.35)",
                 }}
-                onMouseEnter={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0d6460"; el.style.transform = "translateY(-2px)"; el.style.boxShadow = "0 10px 32px rgba(15,118,110,0.45)"; }}
-                onMouseLeave={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0f766e"; el.style.transform = "none"; el.style.boxShadow = "0 4px 20px rgba(15,118,110,0.35)"; }}
+                // onMouseEnter={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0d6460"; el.style.transform = "translateY(-2px)"; el.style.boxShadow = "0 10px 32px rgba(15,118,110,0.45)"; }}
+                // onMouseLeave={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0f766e"; el.style.transform = "none"; el.style.boxShadow = "0 4px 20px rgba(15,118,110,0.35)"; }}
               >
                 Launch App <Arrow size={16} color="#fff" />
               </AppLink>
