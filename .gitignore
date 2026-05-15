@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+.next
+.vercel
+
+# Environment variables (SUPER IMPORTANT — keeps your secrets safe)
+.env
+.env.local
+.env*.local
+.env.production
+.env.development
+
+# Deployment files (addresses are public on blockchain, no need to push)
+deployments/
+
+# Logs and temporary files
+*.log
+.DS_Store
+Thumbs.db
+
+# Hardhat files (optional but clean)
+cache/
+artifacts/

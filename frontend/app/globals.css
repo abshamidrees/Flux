@@ -1,0 +1,328 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap');
+
+/* ── TOKENS ─────────────────────────────────────────────── */
+:root {
+  /* Brand */
+  --teal:      #0f766e;
+  --teal-l:    #14b8a6;
+  --teal-d:    #0d6460;
+  --teal-10:   rgba(15,118,110,0.10);
+  --teal-20:   rgba(15,118,110,0.20);
+
+  /* Status — used ONLY for semantic meaning, not decoration */
+  --green:     #10b981;
+  --green-10:  rgba(16,185,129,0.10);
+  --green-20:  rgba(16,185,129,0.20);
+  --red:       #ef4444;
+  --red-10:    rgba(239,68,68,0.10);
+  --amber:     #f59e0b;
+  --amber-10:  rgba(245,158,11,0.10);
+
+  /* Landing (light) */
+  --land-bg:     #f8fafc;
+  --land-text:   #0f172a;
+  --land-muted:  #475569;
+  --land-border: #e2e8f0;
+}
+
+/* ── APP DARK (default) — Rise palette ──────────────────── */
+:root, [data-theme="dark"] {
+  --bg:   #0b0e11;   /* Rise main background */
+  --bg2:  #181b21;   /* Rise card/panel background */
+  --bg3:  #1e2330;   /* inputs, inner surfaces */
+  --bg4:  #242938;   /* hover states */
+  --bdr:  #252b38;   /* default border */
+  --bdr2: #2e3647;   /* hover border */
+  --tx:   #e8eaf2;   /* primary text */
+  --tx2:  #8892aa;   /* secondary text */
+  --tx3:  #4a5470;   /* muted/placeholder */
+  --shadow: 0 4px 24px rgba(0,0,0,0.5);
+  --shadow-lg: 0 12px 48px rgba(0,0,0,0.6);
+}
+
+/* ── APP LIGHT ───────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:   #f1f5f9;
+  --bg2:  #ffffff;
+  --bg3:  #f8fafc;
+  --bg4:  #e8edf5;
+  --bdr:  #e2e8f0;
+  --bdr2: #cbd5e1;
+  --tx:   #0f172a;
+  --tx2:  #475569;
+  --tx3:  #94a3b8;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --shadow-lg: 0 12px 48px rgba(0,0,0,0.12);
+}
+
+/* ── BASE ────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+body { font-family: 'Manrope', sans-serif; background: var(--land-bg); color: var(--land-text); line-height: 1.6; }
+a { text-decoration: none; }
+
+/* ── APP SHELL ───────────────────────────────────────────── */
+.app-root {
+  background: var(--bg);
+  color: var(--tx);
+  min-height: 100vh;
+  font-family: 'Manrope', sans-serif;
+  transition: background 0.25s, color 0.25s;
+}
+.mono { font-family: 'IBM Plex Mono', monospace; }
+
+/* ── CARDS — no colorful top borders ────────────────────── */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.card:hover { border-color: var(--bdr2); }
+.card-p  { padding: 20px 22px; }
+.card-sm { padding: 14px 18px; }
+.card-hd {
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--bdr);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-lift:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+  border-color: var(--bdr2);
+}
+
+/* ── STAT CARDS — Rise style, no colorful borders ────────── */
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+  padding: 18px 20px;
+  transition: border-color 0.2s, transform 0.2s;
+  /* NO ::before pseudo-element — that caused the oval borders */
+}
+.stat-card:hover { border-color: var(--bdr2); transform: translateY(-1px); }
+
+/* All stat values use same teal — no multi-color system */
+.stat-num {
+  font-family: 'Manrope', sans-serif;
+  font-size: 26px; font-weight: 800;
+  letter-spacing: -0.04em; line-height: 1;
+  color: var(--tx);   /* white/near-white, not colored */
+  margin-bottom: 4px;
+}
+.stat-label {
+  font-family: 'Manrope', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--tx3); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* ── INPUTS ──────────────────────────────────────────────── */
+.inp {
+  width: 100%; background: var(--bg3);
+  border: 1px solid var(--bdr); border-radius: 8px;
+  padding: 10px 13px;
+  font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--tx);
+  outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+}
+.inp:focus { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal-10); }
+.inp::placeholder { color: var(--tx3); }
+
+/* ── BUTTONS ─────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font-family: 'Manrope', sans-serif; font-weight: 700;
+  border-radius: 8px; border: none; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+  font-size: 14px; padding: 10px 18px;
+}
+.btn:disabled { opacity: 0.36; cursor: not-allowed; transform: none !important; }
+
+.btn-primary {
+  background: var(--teal); color: #fff;
+  box-shadow: 0 2px 10px rgba(15,118,110,0.22);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--teal-d); transform: translateY(-1px);
+  box-shadow: 0 5px 18px rgba(15,118,110,0.32);
+}
+
+.btn-secondary {
+  background: var(--bg3); color: var(--tx2);
+  border: 1px solid var(--bdr2);
+}
+.btn-secondary:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
+
+.btn-ghost {
+  background: transparent; color: var(--tx3);
+  border: 1px solid var(--bdr); font-size: 13px; padding: 7px 13px;
+}
+.btn-ghost:hover:not(:disabled) { border-color: var(--bdr2); color: var(--tx2); }
+
+.btn-danger {
+  background: var(--red-10); color: var(--red);
+  border: 1px solid rgba(239,68,68,0.22);
+}
+.btn-danger:hover:not(:disabled) { background: rgba(239,68,68,0.16); }
+
+.btn-sm  { font-size: 12px; padding: 7px 13px; border-radius: 7px; }
+.btn-lg  { font-size: 15px; padding: 12px 24px; }
+.btn-full { width: 100%; }
+
+/* Landing CTAs */
+.land-cta {
+  display: inline-flex; align-items: center; gap: 9px;
+  font-family: 'Manrope', sans-serif; font-size: 15px; font-weight: 700;
+  color: #fff; padding: 13px 28px; border-radius: 10px; border: none; cursor: pointer;
+  background: var(--teal); text-decoration: none; transition: all 0.2s;
+  box-shadow: 0 4px 18px rgba(15,118,110,0.28);
+}
+.land-cta:hover { background: var(--teal-d); transform: translateY(-2px); box-shadow: 0 10px 28px rgba(15,118,110,0.38); }
+
+/* ── LABEL ───────────────────────────────────────────────── */
+.lbl {
+  display: block; font-family: 'Manrope', sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--tx3); margin-bottom: 7px;
+}
+
+/* ── CHIPS — minimal, semantic only ─────────────────────── */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: 'Manrope', sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 3px 9px; border-radius: 100px; white-space: nowrap;
+}
+/* Only two chip variants — positive and negative */
+.chip-up   { background: var(--green-10); color: #34d399; border: 1px solid var(--green-20); }
+.chip-down { background: var(--red-10);   color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+.chip-muted{ background: var(--bg3);      color: var(--tx2); border: 1px solid var(--bdr); }
+.chip-teal { background: var(--teal-10);  color: var(--teal-l); border: 1px solid var(--teal-20); }
+
+/* ── STATUS BANNERS ──────────────────────────────────────── */
+.banner {
+  display: flex; align-items: flex-start; gap: 10px;
+  border-radius: 9px; padding: 12px 15px;
+  font-size: 13px; font-weight: 500; font-family: 'Manrope', sans-serif;
+}
+.ok   { background: var(--green-10); border: 1px solid var(--green-20); color: #34d399; }
+.ok a { color: #34d399; font-weight: 700; }
+.err  { background: var(--red-10);   border: 1px solid rgba(239,68,68,0.2); color: #fca5a5; }
+.warn { background: var(--amber-10); border: 1px solid rgba(245,158,11,0.2); color: #fbbf24; }
+.info { background: var(--teal-10);  border: 1px solid var(--teal-20); color: var(--teal-l); }
+
+/* ── DIVIDER ─────────────────────────────────────────────── */
+.divider { border: none; border-top: 1px solid var(--bdr); margin: 16px 0; }
+
+/* ── TABLE — Rise style ──────────────────────────────────── */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th {
+  font-family: 'Manrope', sans-serif; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.07em; text-transform: uppercase; color: var(--tx3);
+  padding: 9px 14px; text-align: left; border-bottom: 1px solid var(--bdr);
+  white-space: nowrap; background: var(--bg2);
+}
+.tbl td { padding: 10px 14px; border-bottom: 1px solid var(--bdr); color: var(--tx2); vertical-align: middle; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: var(--bg3); }
+
+/* ── SKELETON ────────────────────────────────────────────── */
+@keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+.skel {
+  background: linear-gradient(90deg, var(--bg3) 25%, var(--bg4) 50%, var(--bg3) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 5px;
+}
+
+/* ── TOOLTIP — fixed inline hover, no CSS class needed ───── */
+/* Tooltip component is pure React state — no CSS needed here */
+
+/* ── MODAL ───────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 400; backdrop-filter: blur(4px);
+  animation: fadeIn 0.15s ease;
+}
+.modal-box {
+  background: var(--bg2); border: 1px solid var(--bdr2);
+  border-radius: 14px; width: 100%; max-width: 420px;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.2s ease;
+}
+.modal-hd {
+  padding: 18px 22px; border-bottom: 1px solid var(--bdr);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-hd h3 { font-family: 'Manrope', sans-serif; font-size: 16px; font-weight: 800; color: var(--tx); }
+.modal-body { padding: 20px 22px; }
+.modal-ft {
+  padding: 14px 22px; border-top: 1px solid var(--bdr);
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+
+/* ── PROGRESS BAR ────────────────────────────────────────── */
+.prog-track { background: var(--bdr); border-radius: 3px; height: 4px; overflow: hidden; }
+.prog-fill  { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+
+/* ── TABS ────────────────────────────────────────────────── */
+.tabs {
+  display: flex; gap: 2px;
+  background: var(--bg3); border-radius: 8px; padding: 3px;
+  border: 1px solid var(--bdr);
+}
+.tab {
+  flex: 1; text-align: center; padding: 6px 14px;
+  font-family: 'Manrope', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--tx3); border-radius: 6px; cursor: pointer;
+  transition: all 0.15s; border: none; background: transparent;
+}
+.tab.active { background: var(--bg2); color: var(--tx); box-shadow: 0 1px 4px rgba(0,0,0,0.35); }
+.tab:hover:not(.active) { color: var(--tx2); }
+
+/* ── NET BANNER ──────────────────────────────────────────── */
+.net-banner {
+  background: rgba(245,158,11,0.07);
+  border: 1px solid rgba(245,158,11,0.2);
+  border-radius: 9px; padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+
+/* ── LANDING ─────────────────────────────────────────────── */
+.hero-grad { background: linear-gradient(160deg,#e8fdf5 0%,#f8fafc 50%,#eff6ff 100%); }
+.grad-text {
+  background: linear-gradient(135deg, #0f766e, #14b8a6);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.land-card {
+  background: #fff; border: 1px solid var(--land-border);
+  border-radius: 14px; padding: 26px 28px;
+  transition: box-shadow 0.25s, transform 0.25s;
+}
+.land-card:hover { box-shadow: 0 20px 50px rgba(0,0,0,0.08); transform: translateY(-3px); }
+
+/* ── ANIMATIONS ──────────────────────────────────────────── */
+@keyframes fadeIn  { from{opacity:0} to{opacity:1} }
+@keyframes fadeUp  { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+@keyframes floatY  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+@keyframes pingDot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.78)} }
+
+.fu0{animation:fadeUp .6s ease both}
+.fu1{animation:fadeUp .6s .1s ease both}
+.fu2{animation:fadeUp .6s .2s ease both}
+.fu3{animation:fadeUp .6s .32s ease both}
+.fu4{animation:fadeUp .6s .46s ease both}
+.float{animation:floatY 5s ease-in-out infinite}
+
+/* ── SCROLLBAR ───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 3px; }
