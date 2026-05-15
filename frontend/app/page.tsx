@@ -27,10 +27,18 @@ function Counter({ to }: { to: number }) {
 }
 
 /* ─── CTA Link with loading trigger ──────────────────── */
-function AppLink({ children, className, style }: {
+function AppLink({ 
+  children, 
+  className, 
+  style, 
+  onMouseEnter, 
+  onMouseLeave 
+}: {
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  onMouseEnter?: React.MouseEventHandler<HTMLAnchorElement>;
+  onMouseLeave?: React.MouseEventHandler<HTMLAnchorElement>;
 }) {
   return (
     <Link
@@ -38,6 +46,8 @@ function AppLink({ children, className, style }: {
       className={className}
       style={style}
       onClick={triggerPageLoad}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       {children}
     </Link>
@@ -81,10 +91,7 @@ function Nav() {
             color: "#fff", padding: "10px 22px", borderRadius: 9,
             background: "#0f766e", textDecoration: "none", transition: "all 0.2s",
             boxShadow: "0 2px 14px rgba(15,118,110,0.3)",
-          }}
-            // onMouseEnter={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0d6460"; el.style.transform = "translateY(-1px)"; }}
-            // onMouseLeave={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0f766e"; el.style.transform = "none"; }}
-          >
+          }}>
             Get Started <Arrow size={14} color="#fff" />
           </AppLink>
         </div>
@@ -160,7 +167,6 @@ export default function Landing() {
       {/* ══ HERO ══════════════════════════════════════════ */}
       <section style={{
         position: "relative", minHeight: "100vh",
-        /* Stronger gradient as requested */
         background: "linear-gradient(145deg, #c8f5e9 0%, #e8fdf5 25%, #f8fafc 55%, #ddeeff 80%, #d4e8ff 100%)",
         display: "flex", alignItems: "center", overflow: "hidden",
       }}>
@@ -343,11 +349,9 @@ export default function Landing() {
       {/* ══ BOTTOM CTA — strong gradient as requested ═════ */}
       <section style={{
         padding: "100px 32px", textAlign: "center",
-        /* Much stronger gradient */
         background: "linear-gradient(145deg, #0f766e 0%, #0a5f59 35%, #0d4a6e 70%, #0a3d5c 100%)",
         position: "relative", overflow: "hidden",
       }}>
-        {/* Glow */}
         <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 800, height: 400, borderRadius: "50%", background: "radial-gradient(ellipse, rgba(255,255,255,0.06) 0%, transparent 70%)", pointerEvents: "none" }} />
         <div style={{ maxWidth: 560, margin: "0 auto", position: "relative", zIndex: 1 }}>
           <h2 style={{ fontFamily: "'Manrope',sans-serif", fontSize: "clamp(28px,5vw,48px)", fontWeight: 800, color: "#ffffff", letterSpacing: "-0.03em", lineHeight: 1.1, marginBottom: 16 }}>
