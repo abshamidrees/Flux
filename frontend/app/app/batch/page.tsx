@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent } from "wagmi";
 import { readContract } from "wagmi/actions";
 import { usePrivy } from "@privy-io/react-auth";
@@ -52,6 +52,20 @@ export default function BatchPage() {
   const [tab, setTab]         = useState<"settle"|"history">("settle");
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
+  // Load batch history from localStorage on wallet connect
+  useEffect(() => {
+    if (!address) return;
+    try {
+      const raw = localStorage.getItem(`flux_batches_${address.toLowerCase()}`);
+      if (!raw) return;
+      setHistory(JSON.parse(raw).map((h: any) => ({
+        ...h,
+        count: BigInt(h.count), totalUSDC: BigInt(h.totalUSDC),
+        fee: BigInt(h.fee), timestamp: BigInt(h.timestamp),
+      })));
+    } catch {}
+  }, [address]);
+
   const fileRef = useRef<HTMLInputElement>(null);
   const { writeContractAsync } = useWriteContract();
   const { isLoading: confirming } = useWaitForTransactionReceipt({ hash: txHash });
@@ -75,7 +89,17 @@ export default function BatchPage() {
           timestamp: (l as any).args.timestamp,
           txHash:    l.transactionHash,
         }));
-        setHistory(prev => [...items, ...prev].slice(0, 50));
+        setHistory(prev => {
+          const next = [...items, ...prev].slice(0, 50);
+          if (address) {
+            try {
+              localStorage.setItem(`flux_batches_${address.toLowerCase()}`, JSON.stringify(
+                next.map(h => ({ ...h, count: h.count.toString(), totalUSDC: h.totalUSDC.toString(), fee: h.fee.toString(), timestamp: h.timestamp.toString() }))
+              ));
+            } catch {}
+          }
+          return next;
+        });
       }
     },
   });

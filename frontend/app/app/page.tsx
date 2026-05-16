@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useAccount, useReadContract } from "wagmi";
 import { FLUX_ABI, FLUX_ADDRESS, formatUSDC, explorerLink } from "../../lib/arc";
 import { Skeleton, Tooltip, EmptyState } from "../../components/UI";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function StatCard({
   label, value, sub, loading, tip,
@@ -94,7 +94,27 @@ function ActionCard({
 
 export default function Dashboard() {
   const { address, isConnected } = useAccount();
-  const [showGlobal, setShowGlobal] = useState(false);
+  const [showGlobal, setShowGlobal] = useState(true);
+
+  // ── User activity counts from localStorage ──
+  const [myStreamCount,  setMyStreamCount]  = useState<number | null>(null);
+  const [myBatchCount,   setMyBatchCount]   = useState<number | null>(null);
+  const [myAgentPayCount, setMyAgentPayCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!address) { setMyStreamCount(null); setMyBatchCount(null); setMyAgentPayCount(null); return; }
+    const key = address.toLowerCase();
+    try {
+      const streams  = JSON.parse(localStorage.getItem(`flux_streams_${key}`)   || "[]");
+      const batches  = JSON.parse(localStorage.getItem(`flux_batches_${key}`)   || "[]");
+      const payments = JSON.parse(localStorage.getItem(`flux_payments_${key}`)  || "[]");
+      setMyStreamCount(streams.length);
+      setMyBatchCount(batches.length);
+      setMyAgentPayCount(payments.length);
+    } catch {
+      setMyStreamCount(0); setMyBatchCount(0); setMyAgentPayCount(0);
+    }
+  }, [address]);
 
   const { data: stats, isLoading } = useReadContract({
     address: FLUX_ADDRESS as `0x${string}`,
@@ -142,7 +162,7 @@ export default function Dashboard() {
       {/* Platform stats */}
       {showGlobal && (
         <div style={{ marginBottom: 20 }}>
-          <div className="lbl" style={{ marginBottom: 10 }}>Platform Stats</div>
+          <div className="lbl" style={{ marginBottom: 10 }}>PLATFORM STATS</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 10, marginBottom: 4 }}>
             <StatCard label="Total Settled"  value={volume}  sub="All time"     loading={isLoading} tip="Total USDC batch-settled through this contract." />
             <StatCard label="Fees Collected" value={fees}    sub="0.1% of vol"  loading={isLoading} tip="Accumulated platform fees at 0.1% per batch." />
@@ -163,7 +183,7 @@ export default function Dashboard() {
           />
         </div>
       ) : (
-        /* Connected — user summary row */
+        /* Connected — user summary */
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 20 }}>
 
           {/* My address */}
@@ -193,9 +213,11 @@ export default function Dashboard() {
           <div className="stat-card">
             <div className="stat-label">
               My Streams
-              <Tooltip text="Payment streams you have created or are receiving." />
+              <Tooltip text="Payment streams you have created. Updates as you use the Streams page." />
             </div>
-            <div className="stat-num">—</div>
+            <div className="stat-num">
+              {myStreamCount !== null ? myStreamCount : "—"}
+            </div>
             <div style={{ fontSize: 12, color: "var(--tx3)", marginTop: 4 }}>
               <Link href="/app/streams" style={{ color: "var(--teal)", fontWeight: 600, fontSize: 12 }}>
                 View streams →
@@ -203,16 +225,18 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* My agents */}
+          {/* My batches */}
           <div className="stat-card">
             <div className="stat-label">
-              My Agents
-              <Tooltip text="AI agent wallets you have registered with spending caps." />
+              My Batches
+              <Tooltip text="Batch settlements you have executed. Updates as you use the Batch page." />
             </div>
-            <div className="stat-num">—</div>
+            <div className="stat-num">
+              {myBatchCount !== null ? myBatchCount : "—"}
+            </div>
             <div style={{ fontSize: 12, color: "var(--tx3)", marginTop: 4 }}>
-              <Link href="/app/agents" style={{ color: "var(--teal)", fontWeight: 600, fontSize: 12 }}>
-                Manage agents →
+              <Link href="/app/batch" style={{ color: "var(--teal)", fontWeight: 600, fontSize: 12 }}>
+                View history →
               </Link>
             </div>
           </div>
@@ -221,7 +245,7 @@ export default function Dashboard() {
 
       {/* Actions */}
       <div style={{ marginBottom: 24 }}>
-        <div className="lbl" style={{ marginBottom: 12 }}>Actions</div>
+        <div className="lbl" style={{ marginBottom: 12 }}>ACTIONS</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
           <ActionCard
             href="/app/batch"
@@ -277,11 +301,11 @@ export default function Dashboard() {
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
               {[
-                ["Chain ID",      "5042002"],
-                ["RPC",           "rpc.testnet.arc.network"],
-                ["Gas token",     "USDC (native)"],
-                ["Finality",      "< 1 second"],
-                ["Platform fee",  "0.1% on batch"],
+                ["Chain ID",     "5042002"],
+                ["RPC",          "rpc.testnet.arc.network"],
+                ["Gas token",    "USDC (native)"],
+                ["Finality",     "< 1 second"],
+                ["Platform fee", "0.1% on batch"],
               ].map(([k, v]) => (
                 <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: "var(--tx3)", fontWeight: 500 }}>{k}</span>
@@ -292,7 +316,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Getting started checklist */}
+        {/* Getting started */}
         <div className="card">
           <div className="card-hd">
             <div className="lbl" style={{ marginBottom: 0 }}>Getting Started</div>
@@ -303,8 +327,8 @@ export default function Dashboard() {
               { n: "1", t: "Add Arc Testnet to MetaMask", s: "Chain ID 5042002", done: false },
               { n: "2", t: "Get test USDC",               s: "faucet.circle.com", done: false },
               { n: "3", t: "Connect your wallet",         s: "Top-right nav button", done: isConnected },
-              { n: "4", t: "Try Batch Settlement",        s: "Send to multiple wallets at once", done: false },
-              { n: "5", t: "Create a Stream",             s: "Set up linear payroll vesting", done: false },
+              { n: "4", t: "Try Batch Settlement",        s: "Send to multiple wallets at once", done: (myBatchCount ?? 0) > 0 },
+              { n: "5", t: "Create a Stream",             s: "Set up linear payroll vesting",    done: (myStreamCount ?? 0) > 0 },
             ].map(s => (
               <div key={s.n} style={{ display: "flex", gap: 12, marginBottom: 11, alignItems: "flex-start" }}>
                 <div style={{
