@@ -56,8 +56,8 @@ function AgentCard({ addr, selected, onClick }: { addr: string; selected: boolea
   return (
     <div className="card" style={{ cursor: "pointer", border: selected ? "1px solid var(--teal)" : "1px solid var(--bdr)", transition: "all 0.18s" }}
       onClick={onClick}
-      // onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.borderColor = "var(--bdr2)"; }}
-      // onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.borderColor = "var(--bdr)"; }}
+      onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.borderColor = "var(--bdr2)"; }}
+      onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.borderColor = "var(--bdr)"; }}
     >
       <div className="card-p">
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
@@ -120,12 +120,15 @@ export default function AgentsPage() {
   }, [address]);
 
   useWatchContractEvent({
-    address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "AgentPayment",
+    address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "AgentRegistered",
     enabled: !!FLUX_ADDRESS,
     onLogs: (logs) => {
+      // AgentRegistered fires when a new agent is added — log it to activity tab
       const items: AgentPayment[] = logs.map(l => ({
-        agent: (l as any).args.agent, recipient: (l as any).args.recipient,
-        amount: (l as any).args.amount, txHash: l.transactionHash,
+        agent: (l as any).args.agent ?? "",
+        recipient: (l as any).args.registeredBy ?? (l as any).args.owner ?? "",
+        amount: (l as any).args.cap ?? 0n,
+        txHash: l.transactionHash,
       }));
       setPayments(prev => {
         const next = [...items, ...prev].slice(0, 100);
@@ -152,7 +155,7 @@ export default function AgentsPage() {
         address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI,
         functionName: "registerAgent",
         args: [rSnap.addr as `0x${string}`, rSnap.label, parseUSDC(rSnap.budget)],
-        gas: 200_000n,
+        gas: 200_000n,   // ← explicit gas prevents estimation failure
       });
       setRTx(tx);
       agAddrVal.current = ""; agLabelVal.current = ""; budgetVal.current = "";
@@ -161,6 +164,7 @@ export default function AgentsPage() {
       if (budgetDom.current) budgetDom.current.value = "";
     } catch (e: unknown) {
       const msg = (e as { shortMessage?: string }).shortMessage || "Transaction failed";
+      // Friendlier owner error
       if (msg.toLowerCase().includes("owner") || msg.toLowerCase().includes("not owner")) {
         setRErr("Only the contract owner can register agents. Connect the deployer wallet.");
       } else {
@@ -180,6 +184,7 @@ export default function AgentsPage() {
     if (!FLUX_ADDRESS || !USDC_ADDRESS) { setDErr("Contracts not deployed"); setDBusy(false); return; }
     try {
       const a = parseUSDC(dSnap);
+      // Approve first, then deposit — same pattern as batch/streams
       await writeContractAsync({ address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: "approve", args: [FLUX_ADDRESS as `0x${string}`, a] });
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "depositForAgents", args: [a], gas: 300_000n });
       setDTx(tx);
