@@ -150,48 +150,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Bottom info */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div className="card">
-          <div className="card-hd">
-            <div className="lbl" style={{ marginBottom: 0 }}>Contract</div>
-            {FLUX_ADDRESS && <a href={explorerLink("address", FLUX_ADDRESS)} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "'Manrope',sans-serif", fontSize: 12, fontWeight: 600, color: "var(--teal)" }}>ArcScan ↗</a>}
-          </div>
-          <div className="card-p">
-            {FLUX_ADDRESS ? <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: "var(--tx2)", wordBreak: "break-all", marginBottom: 14, lineHeight: 1.6 }}>{FLUX_ADDRESS}</div> : <div className="banner warn" style={{ marginBottom: 14 }}>Contract not deployed.</div>}
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-              {[["Chain ID","5042002"],["RPC","rpc.testnet.arc.network"],["Gas token","USDC (native)"],["Finality","< 1 second"],["Platform fee","0.1% on batch"]].map(([k,v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, color: "var(--tx3)", fontWeight: 500 }}>{k}</span>
-                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, color: "var(--tx2)" }}>{v}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-hd"><div className="lbl" style={{ marginBottom: 0 }}>Getting Started</div><span className="chip chip-teal" style={{ fontSize: 10 }}>Checklist</span></div>
-          <div className="card-p">
-            {[
-              { n:"1", t:"Add Arc Testnet to MetaMask", s:"Chain ID 5042002", done: false },
-              { n:"2", t:"Get test USDC",               s:"faucet.circle.com", done: false },
-              { n:"3", t:"Connect your wallet",         s:"Top-right nav button", done: isConnected },
-              { n:"4", t:"Try Batch Settlement",        s:"Send to multiple wallets at once", done: false },
-              { n:"5", t:"Create a Stream",             s:"Set up linear payroll vesting", done: (myStreamCount ?? 0) > 0 },
-            ].map(s => (
-              <div key={s.n} style={{ display: "flex", gap: 12, marginBottom: 11, alignItems: "flex-start" }}>
-                <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, marginTop: 1, background: s.done ? "var(--teal-10)" : "var(--bg3)", border: `1px solid ${s.done ? "var(--teal-20)" : "var(--bdr)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, color: s.done ? "var(--teal)" : "var(--tx3)" }}>
-                  {s.done ? "✓" : s.n}
-                </div>
-                <div>
-                  <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 13, fontWeight: 700, color: s.done ? "var(--tx3)" : "var(--tx)", marginBottom: 1, textDecoration: s.done ? "line-through" : "none" }}>{s.t}</div>
-                  <div style={{ fontSize: 12, color: "var(--tx3)", fontWeight: 500 }}>{s.s}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+
     </div>
   );
 }
