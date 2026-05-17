@@ -84,6 +84,9 @@ export default function StreamsPage() {
   const [cnTx, setCnTx] = useState<`0x${string}`|undefined>(); const [cnConfirm, setCnConfirm] = useState(false); const [cnSnap, setCnSnap] = useState("");
 
   const [history, setHistory] = useState<StreamEvent[]>([]);
+  // Ref so the event handler always has the current address (avoids stale closure bug)
+  const addressRef = useRef("");
+  useEffect(() => { addressRef.current = address ?? ""; }, [address]);
   const { isLoading: cConf } = useWaitForTransactionReceipt({ hash: cTx });
   const { isLoading: wConf } = useWaitForTransactionReceipt({ hash: wTx });
   const { isLoading: cnConf } = useWaitForTransactionReceipt({ hash: cnTx });
@@ -95,14 +98,14 @@ export default function StreamsPage() {
   }, [address]);
 
   const pushStreams = useCallback((items: StreamEvent[]) => {
-    // Always read localStorage as source of truth — prevents stale React state losing older streams
-    const stored = address ? loadStreams(address) : [];
+    const addr = addressRef.current; // Always fresh — no stale closure
+    const stored = addr ? loadStreams(addr) : [];
     const ids = new Set(stored.map(s => s.id.toString()));
     const fresh = items.filter(s => !ids.has(s.id.toString()));
     const next = [...fresh, ...stored].slice(0, 100);
-    if (address) saveStreams(address, next);
+    if (addr) saveStreams(addr, next);
     setHistory(next);
-  }, [address]);
+  }, []); // Empty deps: uses ref, never stale
 
   useWatchContractEvent({
     address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "StreamCreated", enabled: !!FLUX_ADDRESS,
