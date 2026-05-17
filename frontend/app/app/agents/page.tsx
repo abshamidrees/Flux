@@ -16,14 +16,11 @@ function FieldError({ msg }: { msg: string }) {
   );
 }
 
-interface AgentPayment { agent: string; recipient: string; amount: bigint; txHash?: string; }
+interface AgentPayment { agent: string; recipient: string; amount: bigint; label: string; txHash?: string; }
 
-// ── localStorage helpers ──
 function payKey(addr: string) { return `flux_payments_${addr.toLowerCase()}`; }
 function savePayments(addr: string, list: AgentPayment[]) {
-  try {
-    localStorage.setItem(payKey(addr), JSON.stringify(list.map(p => ({ ...p, amount: p.amount.toString() }))));
-  } catch {}
+  try { localStorage.setItem(payKey(addr), JSON.stringify(list.map(p => ({ ...p, amount: p.amount.toString() })))); } catch {}
 }
 function loadPayments(addr: string): AgentPayment[] {
   try {
@@ -78,9 +75,7 @@ function AgentCard({ addr, selected, onClick }: { addr: string; selected: boolea
         </div>
         {isLoading ? <Skeleton h={8} w="100%" /> : info && <SpendBar spent={(info as any).spent} cap={(info as any).budgetCap} />}
         <a href={explorerLink("address", addr)} target="_blank" rel="noopener noreferrer"
-          style={{ fontFamily: "'Manrope',sans-serif", fontSize: 12, fontWeight: 600, color: "var(--teal)", display: "inline-flex", alignItems: "center", gap: 4, marginTop: 10 }}>
-          ArcScan ↗
-        </a>
+          style={{ fontFamily: "'Manrope',sans-serif", fontSize: 12, fontWeight: 600, color: "var(--teal)", display: "inline-flex", alignItems: "center", gap: 4, marginTop: 10 }}>ArcScan ↗</a>
       </div>
     </div>
   );
@@ -108,12 +103,19 @@ export default function AgentsPage() {
   const { isLoading: rConf } = useWaitForTransactionReceipt({ hash: rTx });
   const { isLoading: dConf } = useWaitForTransactionReceipt({ hash: dTx });
 
+  // Read contract owner
+  const { data: contractOwner } = useReadContract({
+    address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "owner",
+    query: { enabled: !!FLUX_ADDRESS },
+  });
+  const isOwner = !!address && !!contractOwner &&
+    address.toLowerCase() === (contractOwner as string).toLowerCase();
+
   const { data: allAgents, isLoading: agentsLoading } = useReadContract({
     address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "getAllAgents",
     query: { enabled: !!FLUX_ADDRESS },
   });
 
-  // Load payments from localStorage
   useEffect(() => {
     if (!address) return;
     setPayments(loadPayments(address));
@@ -123,11 +125,11 @@ export default function AgentsPage() {
     address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "AgentRegistered",
     enabled: !!FLUX_ADDRESS,
     onLogs: (logs) => {
-      // AgentRegistered fires when a new agent is added — log it to activity tab
       const items: AgentPayment[] = logs.map(l => ({
         agent: (l as any).args.agent ?? "",
-        recipient: (l as any).args.registeredBy ?? (l as any).args.owner ?? "",
+        recipient: "",
         amount: (l as any).args.cap ?? 0n,
+        label: (l as any).args.label ?? "Registered",
         txHash: l.transactionHash,
       }));
       setPayments(prev => {
@@ -140,6 +142,7 @@ export default function AgentsPage() {
 
   const handleRegisterClick = () => {
     setRErr("");
+    if (!isOwner) { setRErr("Connect the contract deployer wallet to register agents."); return; }
     const addr = agAddrVal.current.trim(); const label = agLabelVal.current.trim(); const budget = budgetVal.current.trim();
     if (!addr) { setRErr("Agent wallet address is required"); agAddrDom.current?.focus(); return; }
     if (!ADDR.test(addr)) { setRErr("Invalid address — must be 0x followed by 40 hex characters"); agAddrDom.current?.focus(); return; }
@@ -155,7 +158,7 @@ export default function AgentsPage() {
         address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI,
         functionName: "registerAgent",
         args: [rSnap.addr as `0x${string}`, rSnap.label, parseUSDC(rSnap.budget)],
-        gas: 200_000n,   // ← explicit gas prevents estimation failure
+        gas: 200_000n,
       });
       setRTx(tx);
       agAddrVal.current = ""; agLabelVal.current = ""; budgetVal.current = "";
@@ -164,17 +167,14 @@ export default function AgentsPage() {
       if (budgetDom.current) budgetDom.current.value = "";
     } catch (e: unknown) {
       const msg = (e as { shortMessage?: string }).shortMessage || "Transaction failed";
-      // Friendlier owner error
-      if (msg.toLowerCase().includes("owner") || msg.toLowerCase().includes("not owner")) {
-        setRErr("Only the contract owner can register agents. Connect the deployer wallet.");
-      } else {
-        setRErr(msg.slice(0, 160));
-      }
+      setRErr(msg.includes("owner") ? "Only the contract deployer wallet can register agents." : msg.slice(0, 160));
     } finally { setRBusy(false); }
   };
 
   const handleDepositClick = () => {
-    setDErr(""); const amt = depVal.current.trim();
+    setDErr("");
+    if (!isOwner) { setDErr("Connect the contract deployer wallet to fund the treasury."); return; }
+    const amt = depVal.current.trim();
     if (!amt || parseFloat(amt) <= 0) { setDErr("Enter a deposit amount greater than 0"); depDom.current?.focus(); return; }
     setDSnap(amt); setDConfirm(true);
   };
@@ -184,23 +184,30 @@ export default function AgentsPage() {
     if (!FLUX_ADDRESS || !USDC_ADDRESS) { setDErr("Contracts not deployed"); setDBusy(false); return; }
     try {
       const a = parseUSDC(dSnap);
-      // Approve first, then deposit — same pattern as batch/streams
       await writeContractAsync({ address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: "approve", args: [FLUX_ADDRESS as `0x${string}`, a] });
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "depositForAgents", args: [a], gas: 300_000n });
       setDTx(tx);
       depVal.current = ""; if (depDom.current) depDom.current.value = "";
     } catch (e: unknown) {
-      setDErr((e as { shortMessage?: string }).shortMessage?.slice(0, 140) || "Transaction failed");
+      const msg = (e as { shortMessage?: string }).shortMessage || "Transaction failed";
+      setDErr(msg.includes("owner") ? "Only the contract deployer wallet can fund the treasury." : msg.slice(0, 140));
     } finally { setDBusy(false); }
   };
 
   const myPayments = payments.filter(p => !selectedAgent || p.agent.toLowerCase() === selectedAgent.toLowerCase());
 
+  // Owner wallet notice
+  const OwnerNotice = () => (
+    <div className="banner warn" style={{ marginBottom: 0 }}>
+      <strong>Deployer wallet required.</strong> Both Register Agent and Fund Treasury require the contract owner wallet. Import your deployer private key into MetaMask to use these features.
+    </div>
+  );
+
   return (
     <div style={{ maxWidth: 1120, margin: "0 auto", padding: "32px 24px" }}>
       {rConfirm && (
         <ConfirmModal title="Register Agent"
-          message={<div><p style={{ marginBottom:12 }}>Register this AI agent wallet:</p><div style={{ background:"var(--bg3)", borderRadius:9, padding:"14px 16px", fontFamily:"'IBM Plex Mono',monospace", fontSize:12 }}><div style={{ marginBottom:5, wordBreak:"break-all" }}><span style={{ color:"var(--tx3)" }}>Address: </span><span style={{ color:"var(--tx)" }}>{rSnap.addr}</span></div><div style={{ marginBottom:5 }}><span style={{ color:"var(--tx3)" }}>Label: </span><span style={{ color:"var(--tx)" }}>{rSnap.label}</span></div><div><span style={{ color:"var(--tx3)" }}>Budget cap: </span><span style={{ color:"var(--teal)", fontWeight:700 }}>${parseFloat(rSnap.budget).toFixed(2)} USDC</span></div></div><p style={{ marginTop:10, fontSize:12, color:"var(--tx3)" }}>⚠ Only the contract deployer wallet can register agents.</p></div>}
+          message={<div><p style={{ marginBottom:12 }}>Register this AI agent wallet:</p><div style={{ background:"var(--bg3)", borderRadius:9, padding:"14px 16px", fontFamily:"'IBM Plex Mono',monospace", fontSize:12 }}><div style={{ marginBottom:5, wordBreak:"break-all" }}><span style={{ color:"var(--tx3)" }}>Address: </span><span style={{ color:"var(--tx)" }}>{rSnap.addr}</span></div><div style={{ marginBottom:5 }}><span style={{ color:"var(--tx3)" }}>Label: </span><span>{rSnap.label}</span></div><div><span style={{ color:"var(--tx3)" }}>Budget cap: </span><span style={{ color:"var(--teal)", fontWeight:700 }}>${parseFloat(rSnap.budget).toFixed(2)} USDC</span></div></div></div>}
           confirmLabel="Register Agent" onConfirm={doRegister} onCancel={() => setRConfirm(false)} />
       )}
       {dConfirm && (
@@ -214,6 +221,13 @@ export default function AgentsPage() {
         <p style={{ fontSize:13, color:"var(--tx3)", fontWeight:500 }}>Register AI wallets with USDC spending caps for autonomous onchain commerce.{" "}<Tooltip text="An agent calls agentPay() autonomously up to its budget cap. Contract blocks any payment exceeding the cap."><span style={{ color:"var(--teal)", cursor:"help", fontWeight:700 }}>What is an agent? (?)</span></Tooltip></p>
       </div>
 
+      {/* Owner status banner */}
+      {authenticated && !isOwner && (
+        <div style={{ marginBottom: 16 }}>
+          <OwnerNotice />
+        </div>
+      )}
+
       <div className="tabs" style={{ maxWidth:260, marginBottom:22 }}>
         <button className={`tab ${tab==="registry"?"active":""}`} onClick={() => setTab("registry")}>Registry</button>
         <button className={`tab ${tab==="activity"?"active":""}`} onClick={() => setTab("activity")}>
@@ -226,9 +240,12 @@ export default function AgentsPage() {
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
 
             {/* Register form */}
-            <div className="card">
+            <div className="card" style={{ opacity: !isOwner && authenticated ? 0.6 : 1 }}>
               <div className="card-hd">
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--teal-10)", border:"1px solid var(--teal-20)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>◎</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--tx)" }}>Register Agent</span></div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ width:24, height:24, borderRadius:6, background:"var(--teal-10)", border:"1px solid var(--teal-20)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>◎</div>
+                  <span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--tx)" }}>Register Agent</span>
+                </div>
                 <span className="chip chip-muted" style={{ fontSize:10 }}>Owner only</span>
               </div>
               <div className="card-p">
@@ -237,10 +254,7 @@ export default function AgentsPage() {
                     <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:7 }}><label className="lbl" style={{ marginBottom:0 }}>Agent Wallet Address</label><Tooltip text="The AI agent wallet that will call agentPay() autonomously." /></div>
                     <input ref={agAddrDom} className="inp" placeholder="0x..." onChange={e => { agAddrVal.current = e.target.value; setRErr(""); }} />
                   </div>
-                  <div>
-                    <label className="lbl">Label</label>
-                    <input ref={agLabelDom} className="inp" placeholder="Treasury Bot v1" onChange={e => { agLabelVal.current = e.target.value; setRErr(""); }} />
-                  </div>
+                  <div><label className="lbl">Label</label><input ref={agLabelDom} className="inp" placeholder="Treasury Bot v1" onChange={e => { agLabelVal.current = e.target.value; setRErr(""); }} /></div>
                   <div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:7 }}><label className="lbl" style={{ marginBottom:0 }}>USDC Budget Cap</label><Tooltip text="Max cumulative USDC this agent can spend. Contract blocks payments exceeding this." /></div>
                     <input ref={budgetDom} className="inp" placeholder="500.00" type="number" min="0" step="0.01" onChange={e => { budgetVal.current = e.target.value; setRErr(""); }} />
@@ -255,10 +269,10 @@ export default function AgentsPage() {
             </div>
 
             {/* Fund treasury */}
-            <div className="card">
+            <div className="card" style={{ opacity: !isOwner && authenticated ? 0.6 : 1 }}>
               <div className="card-hd">
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--green-10)", border:"1px solid var(--green-20)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>⬡</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"#10b981" }}>Fund Treasury</span></div>
-                <Tooltip text="USDC deposited here is the pool agents draw from when calling agentPay()." />
+                <span className="chip chip-muted" style={{ fontSize:10 }}>Owner only</span>
               </div>
               <div className="card-p">
                 <p style={{ fontSize:13, color:"var(--tx2)", marginBottom:12, lineHeight:1.55, fontWeight:500 }}>Deposit USDC so agents can trigger autonomous payments without manual intervention.</p>
@@ -307,22 +321,19 @@ export default function AgentsPage() {
             ))}
           </div>
           <div className="card" style={{ overflow:"hidden" }}>
-            <div className="card-hd">
-              <div className="lbl" style={{ marginBottom:0 }}>Agent Payment Activity</div>
-              <span style={{ fontSize:12, color:"var(--tx3)", fontWeight:500 }}>Saved locally · {payments.length} payment{payments.length !== 1 ? "s" : ""}</span>
-            </div>
+            <div className="card-hd"><div className="lbl" style={{ marginBottom:0 }}>Agent Activity</div><span style={{ fontSize:12, color:"var(--tx3)", fontWeight:500 }}>Saved locally · {payments.length} event{payments.length !== 1 ? "s" : ""}</span></div>
             {myPayments.length === 0 ? (
-              <EmptyState icon="📡" title="No payments yet" desc="Agent payments appear here in real time as agents call agentPay()." />
+              <EmptyState icon="📡" title="No activity yet" desc="Agent registrations and payments appear here in real time." />
             ) : (
               <div style={{ overflowX:"auto" }}>
                 <table className="tbl">
-                  <thead><tr><th>Agent</th><th>Recipient</th><th>Amount</th><th>Tx</th></tr></thead>
+                  <thead><tr><th>Event</th><th>Agent</th><th>Cap / Amount</th><th>Tx</th></tr></thead>
                   <tbody>
                     {myPayments.map((p, i) => (
                       <tr key={i}>
+                        <td><span className="chip chip-teal" style={{ fontSize:10 }}>{p.label}</span></td>
                         <td><a href={explorerLink("address", p.agent)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{shortAddress(p.agent)}</a></td>
-                        <td><a href={explorerLink("address", p.recipient)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--tx2)" }}>{shortAddress(p.recipient)}</a></td>
-                        <td style={{ fontFamily:"'Manrope',sans-serif", fontWeight:700, color:"#10b981" }}>${formatUSDC(p.amount)}</td>
+                        <td style={{ fontFamily:"'Manrope',sans-serif", fontWeight:700, color:"var(--teal)" }}>${formatUSDC(p.amount)}</td>
                         <td>{p.txHash && <a href={explorerLink("tx", p.txHash)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{p.txHash.slice(0,8)}… ↗</a>}</td>
                       </tr>
                     ))}

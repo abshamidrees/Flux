@@ -95,13 +95,13 @@ export default function StreamsPage() {
   }, [address]);
 
   const pushStreams = useCallback((items: StreamEvent[]) => {
-    setHistory(prev => {
-      const ids = new Set(prev.map(s => s.id.toString()));
-      const fresh = items.filter(s => !ids.has(s.id.toString()));
-      const next = [...fresh, ...prev].slice(0, 100);
-      if (address) saveStreams(address, next);
-      return next;
-    });
+    // Always read localStorage as source of truth — prevents stale React state losing older streams
+    const stored = address ? loadStreams(address) : [];
+    const ids = new Set(stored.map(s => s.id.toString()));
+    const fresh = items.filter(s => !ids.has(s.id.toString()));
+    const next = [...fresh, ...stored].slice(0, 100);
+    if (address) saveStreams(address, next);
+    setHistory(next);
   }, [address]);
 
   useWatchContractEvent({
