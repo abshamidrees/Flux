@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent, usePublicClient } from "wagmi";
+import { parseAbiItem } from "viem";
 import { usePrivy } from "@privy-io/react-auth";
 import {
   FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS,
@@ -125,21 +126,19 @@ export default function StreamsPage() {
         toBlock: "latest",
       });
 
-      // Fetch StreamCancelled events for this sender
-      const cancelled = await publicClient.getContractEvents({
+      // Fetch StreamCancelled events — use getLogs + parseAbiItem to avoid ABI type constraint
+      const cancelled = await publicClient.getLogs({
         address: FLUX_ADDRESS as `0x${string}`,
-        abi: FLUX_ABI,
-        eventName: "StreamCancelled",
+        event: parseAbiItem("event StreamCancelled(uint256 indexed id, address indexed sender, uint256 refund)"),
         args: { sender: address as `0x${string}` },
         fromBlock: FLUX_DEPLOY_BLOCK,
         toBlock: "latest",
       });
 
-      // Fetch StreamWithdrawn events (indexed by recipient — check if user is recipient of any stream)
-      const withdrawn = await publicClient.getContractEvents({
+      // Fetch StreamWithdrawn events — use getLogs + parseAbiItem to avoid ABI type constraint
+      const withdrawn = await publicClient.getLogs({
         address: FLUX_ADDRESS as `0x${string}`,
-        abi: FLUX_ABI,
-        eventName: "StreamWithdrawn",
+        event: parseAbiItem("event StreamWithdrawn(uint256 indexed id, address indexed recipient, uint256 amount)"),
         fromBlock: FLUX_DEPLOY_BLOCK,
         toBlock: "latest",
       });

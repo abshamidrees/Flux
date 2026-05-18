@@ -24,8 +24,7 @@ export const arcTestnet = defineChain({
 // ── Contract addresses ────────────────────────────────────
 export const FLUX_ADDRESS = (process.env.NEXT_PUBLIC_FLUX_ADDRESS || "") as `0x${string}`;
 export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS || "") as `0x${string}`;
-
-// Approximate contract deployment block
+// Approximate contract deployment block on Arc Testnet (used as fromBlock for getLogs)
 export const FLUX_DEPLOY_BLOCK = 41_000_000n;
 
 // ── USDC ABI (minimal) ────────────────────────────────────
@@ -41,17 +40,54 @@ export const USDC_ABI = [
     stateMutability: "nonpayable",
   },
   {
+    name: "allowance",
+    type: "function",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
     name: "balanceOf",
     type: "function",
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ type: "uint256" }],
     stateMutability: "view",
   },
+  {
+    name: "StreamWithdrawn",
+    type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "recipient", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "StreamCancelled",
+    type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "sender", type: "address", indexed: true },
+      { name: "refund", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "AgentPayment",
+    type: "event",
+    inputs: [
+      { name: "agent", type: "address", indexed: true },
+      { name: "recipient", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
 ] as const;
 
-// ── FULL FluxSettlement ABI (updated with all events) ─────
+// ── FluxSettlement ABI ────────────────────────────────────
 export const FLUX_ABI = [
-  // Functions (same as before)
+  // batchSettle
   {
     name: "batchSettle",
     type: "function",
@@ -62,6 +98,7 @@ export const FLUX_ABI = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+  // createStream
   {
     name: "createStream",
     type: "function",
@@ -74,6 +111,7 @@ export const FLUX_ABI = [
     outputs: [{ name: "streamId", type: "uint256" }],
     stateMutability: "nonpayable",
   },
+  // withdrawFromStream
   {
     name: "withdrawFromStream",
     type: "function",
@@ -81,6 +119,7 @@ export const FLUX_ABI = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+  // cancelStream
   {
     name: "cancelStream",
     type: "function",
@@ -88,6 +127,7 @@ export const FLUX_ABI = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+  // registerAgent
   {
     name: "registerAgent",
     type: "function",
@@ -99,6 +139,19 @@ export const FLUX_ABI = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+  // updateAgent
+  {
+    name: "updateAgent",
+    type: "function",
+    inputs: [
+      { name: "agent", type: "address" },
+      { name: "newBudgetCap", type: "uint256" },
+      { name: "active", type: "bool" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  // depositForAgents
   {
     name: "depositForAgents",
     type: "function",
@@ -106,31 +159,29 @@ export const FLUX_ABI = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+  // withdrawFees
   {
-    name: "getAllAgents",
+    name: "withdrawFees",
     type: "function",
     inputs: [],
-    outputs: [{ name: "", type: "address[]" }],
-    stateMutability: "view",
+    outputs: [],
+    stateMutability: "nonpayable",
   },
+  // getStats
   {
-    name: "getAgent",
+    name: "getStats",
     type: "function",
-    inputs: [{ name: "agent", type: "address" }],
+    inputs: [],
     outputs: [
-      {
-        type: "tuple",
-        components: [
-          { name: "label", type: "string" },
-          { name: "budgetCap", type: "uint256" },
-          { name: "spent", type: "uint256" },
-          { name: "active", type: "bool" },
-          { name: "registeredAt", type: "uint256" },
-        ],
-      },
+      { name: "volume", type: "uint256" },
+      { name: "fees", type: "uint256" },
+      { name: "batches", type: "uint256" },
+      { name: "streamCount", type: "uint256" },
+      { name: "agentCount", type: "uint256" },
     ],
     stateMutability: "view",
   },
+  // getStream
   {
     name: "getStream",
     type: "function",
@@ -151,8 +202,58 @@ export const FLUX_ABI = [
     ],
     stateMutability: "view",
   },
-
-  // Events (THIS WAS THE MISSING PART)
+  // getAgent
+  {
+    name: "getAgent",
+    type: "function",
+    inputs: [{ name: "agent", type: "address" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { name: "label", type: "string" },
+          { name: "budgetCap", type: "uint256" },
+          { name: "spent", type: "uint256" },
+          { name: "active", type: "bool" },
+          { name: "registeredAt", type: "uint256" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  // getAllAgents
+  {
+    name: "getAllAgents",
+    type: "function",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
+    stateMutability: "view",
+  },
+  // claimableAmount
+  {
+    name: "claimableAmount",
+    type: "function",
+    inputs: [{ name: "streamId", type: "uint256" }],
+    outputs: [{ type: "uint256" }],
+    stateMutability: "view",
+  },
+  // owner
+  {
+    name: "owner",
+    type: "function",
+    inputs: [],
+    outputs: [{ type: "address" }],
+    stateMutability: "view",
+  },
+  // totalSettledVolume
+  {
+    name: "totalSettledVolume",
+    type: "function",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+    stateMutability: "view",
+  },
+  // Events
   {
     name: "BatchSettled",
     type: "event",
@@ -177,39 +278,12 @@ export const FLUX_ABI = [
     ],
   },
   {
-    name: "StreamCancelled",
-    type: "event",
-    inputs: [
-      { name: "id", type: "uint256", indexed: true },
-      { name: "sender", type: "address", indexed: true },
-      { name: "refund", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "StreamWithdrawn",
-    type: "event",
-    inputs: [
-      { name: "id", type: "uint256", indexed: true },
-      { name: "recipient", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "AgentRegistered",
     type: "event",
     inputs: [
       { name: "agent", type: "address", indexed: true },
       { name: "label", type: "string", indexed: false },
       { name: "budgetCap", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "AgentPayment",
-    type: "event",
-    inputs: [
-      { name: "agent", type: "address", indexed: true },
-      { name: "recipient", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
     ],
   },
 ] as const;
