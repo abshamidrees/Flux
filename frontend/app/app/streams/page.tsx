@@ -1,61 +1,73 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent } from "wagmi";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent, usePublicClient } from "wagmi";
 import { usePrivy } from "@privy-io/react-auth";
-import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, explorerLink } from "../../../lib/arc";
+import {
+  FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS,
+  parseUSDC, formatUSDC, explorerLink, FLUX_DEPLOY_BLOCK
+} from "../../../lib/arc";
 import { Tooltip, ConfirmModal, EmptyState, TxBanner } from "../../../components/UI";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 
 function FieldError({ msg }: { msg: string }) {
   return (
-    <div style={{ fontSize: 12, color: "#fca5a5", fontWeight: 600, fontFamily: "'Manrope',sans-serif", marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
-      <span>⚠</span> {msg}
+    <div style={{ fontSize: 12, color: "#fca5a5", fontWeight: 600, marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
+      ⚠ {msg}
     </div>
   );
 }
 
-interface StreamEvent {
-  id: bigint; recipient: string; amount: bigint;
-  startTime: bigint; endTime: bigint; txHash?: string;
+type StreamStatus = "active" | "finished" | "cancelled" | "withdrawn";
+
+interface StreamItem {
+  id: bigint;
+  recipient: string;
+  amount: bigint;
+  startTime: bigint;
+  endTime: bigint;
+  txHash?: string;
+  status: StreamStatus;
 }
 
-function lsKey(addr: string) { return `flux_streams_${addr.toLowerCase()}`; }
-function saveStreams(addr: string, list: StreamEvent[]) {
-  try {
-    localStorage.setItem(lsKey(addr), JSON.stringify(list.map(s => ({
-      ...s, id: s.id.toString(), amount: s.amount.toString(),
-      startTime: s.startTime.toString(), endTime: s.endTime.toString(),
-    }))));
-  } catch {}
+function getDisplayStatus(s: StreamItem): StreamStatus {
+  if (s.status === "cancelled" || s.status === "withdrawn") return s.status;
+  if (Number(s.endTime) * 1000 < Date.now()) return "finished";
+  return "active";
 }
-function loadStreams(addr: string): StreamEvent[] {
-  try {
-    const raw = localStorage.getItem(lsKey(addr));
-    if (!raw) return [];
-    return JSON.parse(raw).map((s: any) => ({
-      ...s, id: BigInt(s.id), amount: BigInt(s.amount),
-      startTime: BigInt(s.startTime), endTime: BigInt(s.endTime),
-    }));
-  } catch { return []; }
+
+function StatusBadge({ status }: { status: StreamStatus }) {
+  const cfg: Record<StreamStatus, { label: string; bg: string; color: string; border: string }> = {
+    active:    { label: "● Active",    bg: "var(--teal-10)",          color: "var(--teal)", border: "var(--teal-20)" },
+    finished:  { label: "✓ Finished",  bg: "rgba(100,116,139,0.12)",  color: "#94a3b8",     border: "rgba(100,116,139,0.25)" },
+    cancelled: { label: "✕ Cancelled", bg: "rgba(239,68,68,0.08)",    color: "#f87171",     border: "rgba(239,68,68,0.2)" },
+    withdrawn: { label: "↓ Withdrawn", bg: "rgba(139,92,246,0.1)",    color: "#a78bfa",     border: "rgba(139,92,246,0.2)" },
+  };
+  const c = cfg[status];
+  return (
+    <span style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}`, borderRadius: 999, padding: "2px 8px", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>
+      {c.label}
+    </span>
+  );
 }
 
 function VestingPreview({ amount, startDate, endDate }: { amount: string; startDate: string; endDate: string }) {
   if (!amount || !startDate || !endDate) return null;
   const dur = Math.max(0, (new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000);
   if (dur <= 0) return null;
-  const perDay = parseFloat(amount) / dur;
   return (
     <div style={{ background: "var(--bg3)", border: "1px solid var(--bdr)", borderRadius: 9, padding: "14px 16px" }}>
       <div className="lbl" style={{ marginBottom: 10 }}>Preview</div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
         <span style={{ fontSize: 13, color: "var(--tx2)", fontWeight: 500 }}>Duration</span>
-        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, color: "var(--tx2)" }}>{dur.toFixed(0)} days</span>
+        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>{dur.toFixed(0)} days</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
         <span style={{ fontSize: 13, color: "var(--tx2)", fontWeight: 500 }}>Daily rate</span>
-        <span style={{ fontFamily: "'Manrope',sans-serif", fontSize: 13, fontWeight: 800, color: "var(--teal)" }}>${perDay.toFixed(4)} / day</span>
+        <span style={{ fontFamily: "'Manrope',sans-serif", fontSize: 13, fontWeight: 800, color: "var(--teal)" }}>
+          ${(parseFloat(amount) / dur).toFixed(4)} / day
+        </span>
       </div>
       <div className="prog-track"><div className="prog-fill" style={{ width: "0%", background: "var(--teal)" }} /></div>
       <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, color: "var(--tx3)", marginTop: 5 }}>0% released — not started yet</div>
@@ -66,67 +78,129 @@ function VestingPreview({ amount, startDate, endDate }: { amount: string; startD
 export default function StreamsPage() {
   const { authenticated } = usePrivy();
   const { address } = useAccount();
+  const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
-  const [tab, setTab] = useState<"create"|"history">("create");
 
-  const recipVal = useRef(""); const amountVal = useRef(""); const startVal = useRef(""); const endVal = useRef("");
-  const [previewAmount, setPreviewAmount] = useState(""); const [previewStart, setPreviewStart] = useState(""); const [previewEnd, setPreviewEnd] = useState("");
+  const [tab, setTab] = useState<"create" | "history">("create");
+  const [streams, setStreams] = useState<StreamItem[]>([]);
+  const [loadingStreams, setLoadingStreams] = useState(false);
+  const [loadError, setLoadError] = useState("");
+
+  // Create form
+  const recipVal = useRef(""); const amountVal = useRef("");
+  const startVal = useRef(""); const endVal = useRef("");
+  const [previewAmount, setPreviewAmount] = useState("");
+  const [previewStart, setPreviewStart] = useState(""); const [previewEnd, setPreviewEnd] = useState("");
   const [createErr, setCreateErr] = useState(""); const [busy, setBusy] = useState(false);
-  const [cTx, setCTx] = useState<`0x${string}`|undefined>(); const [confirm, setConfirm] = useState(false);
-  const [snap, setSnap] = useState({ recip:"", amount:"", start:"", end:"" });
+  const [cTx, setCTx] = useState<`0x${string}` | undefined>(); const [confirm, setConfirm] = useState(false);
+  const [snap, setSnap] = useState({ recip: "", amount: "", start: "", end: "" });
 
+  // Withdraw
   const wIdVal = useRef(""); const [wId, setWId] = useState("");
   const [wErr, setWErr] = useState(""); const [wBusy, setWBusy] = useState(false);
-  const [wTx, setWTx] = useState<`0x${string}`|undefined>(); const [wConfirm, setWConfirm] = useState(false); const [wSnap, setWSnap] = useState("");
+  const [wTx, setWTx] = useState<`0x${string}` | undefined>(); const [wConfirm, setWConfirm] = useState(false); const [wSnap, setWSnap] = useState("");
 
+  // Cancel
   const cnIdVal = useRef(""); const [cnId, setCnId] = useState("");
   const [cnErr, setCnErr] = useState(""); const [cnBusy, setCnBusy] = useState(false);
-  const [cnTx, setCnTx] = useState<`0x${string}`|undefined>(); const [cnConfirm, setCnConfirm] = useState(false); const [cnSnap, setCnSnap] = useState("");
+  const [cnTx, setCnTx] = useState<`0x${string}` | undefined>(); const [cnConfirm, setCnConfirm] = useState(false); const [cnSnap, setCnSnap] = useState("");
 
-  const [history, setHistory] = useState<StreamEvent[]>([]);
-  // Ref so the event handler always has the current address (avoids stale closure bug)
-  const addressRef = useRef("");
-  useEffect(() => { addressRef.current = address ?? ""; }, [address]);
   const { isLoading: cConf } = useWaitForTransactionReceipt({ hash: cTx });
   const { isLoading: wConf } = useWaitForTransactionReceipt({ hash: wTx });
   const { isLoading: cnConf } = useWaitForTransactionReceipt({ hash: cnTx });
 
-  // Load from localStorage when wallet connects
-  useEffect(() => {
-    if (!address) return;
-    setHistory(loadStreams(address));
-  }, [address]);
+  // ── Fetch ALL streams from blockchain ───────────────────
+  const fetchStreams = useCallback(async () => {
+    if (!address || !FLUX_ADDRESS || !publicClient) return;
+    setLoadingStreams(true);
+    setLoadError("");
+    try {
+      // Fetch StreamCreated events for this sender
+      const created = await publicClient.getContractEvents({
+        address: FLUX_ADDRESS as `0x${string}`,
+        abi: FLUX_ABI,
+        eventName: "StreamCreated",
+        args: { sender: address as `0x${string}` },
+        fromBlock: FLUX_DEPLOY_BLOCK,
+        toBlock: "latest",
+      });
 
-  const pushStreams = useCallback((items: StreamEvent[]) => {
-    const addr = addressRef.current; // Always fresh — no stale closure
-    const stored = addr ? loadStreams(addr) : [];
-    const ids = new Set(stored.map(s => s.id.toString()));
-    const fresh = items.filter(s => !ids.has(s.id.toString()));
-    const next = [...fresh, ...stored].slice(0, 100);
-    if (addr) saveStreams(addr, next);
-    setHistory(next);
-  }, []); // Empty deps: uses ref, never stale
+      // Fetch StreamCancelled events for this sender
+      const cancelled = await publicClient.getContractEvents({
+        address: FLUX_ADDRESS as `0x${string}`,
+        abi: FLUX_ABI,
+        eventName: "StreamCancelled",
+        args: { sender: address as `0x${string}` },
+        fromBlock: FLUX_DEPLOY_BLOCK,
+        toBlock: "latest",
+      });
 
+      // Fetch StreamWithdrawn events (indexed by recipient — check if user is recipient of any stream)
+      const withdrawn = await publicClient.getContractEvents({
+        address: FLUX_ADDRESS as `0x${string}`,
+        abi: FLUX_ABI,
+        eventName: "StreamWithdrawn",
+        fromBlock: FLUX_DEPLOY_BLOCK,
+        toBlock: "latest",
+      });
+
+      const cancelledIds = new Set(cancelled.map(e => (e.args as any).id?.toString()));
+      // Build withdrawn IDs for streams this user created (cross-reference by checking stream IDs)
+      const createdIds = new Set(created.map(e => (e.args as any).id?.toString()));
+      const withdrawnIds = new Set(
+        withdrawn
+          .filter(e => createdIds.has((e.args as any).id?.toString()))
+          .map(e => (e.args as any).id?.toString())
+      );
+
+      const items: StreamItem[] = created.map(e => {
+        const a = e.args as any;
+        const id = a.id as bigint;
+        const idStr = id.toString();
+        let status: StreamStatus = "active";
+        if (cancelledIds.has(idStr)) status = "cancelled";
+        else if (withdrawnIds.has(idStr)) status = "withdrawn";
+        return {
+          id, recipient: a.recipient, amount: a.amount,
+          startTime: a.startTime, endTime: a.endTime,
+          txHash: e.transactionHash ?? undefined, status,
+        };
+      });
+
+      // Sort: active first, then finished, then withdrawn, then cancelled; newest first within group
+      const order: Record<string, number> = { active: 0, finished: 1, withdrawn: 2, cancelled: 3 };
+      items.sort((a, b) => {
+        const sa = getDisplayStatus(a); const sb = getDisplayStatus(b);
+        if (sa !== sb) return order[sa] - order[sb];
+        return Number(b.id) - Number(a.id);
+      });
+
+      setStreams(items);
+    } catch (err: any) {
+      console.error("Failed to load streams:", err);
+      setLoadError("Could not load streams. Check your connection and try refreshing.");
+    } finally {
+      setLoadingStreams(false);
+    }
+  }, [address, publicClient]);
+
+  useEffect(() => { fetchStreams(); }, [fetchStreams]);
+
+  // Real-time: new stream created → refresh
   useWatchContractEvent({
-    address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "StreamCreated", enabled: !!FLUX_ADDRESS,
-    onLogs: (logs) => {
-      const items = logs.map(l => ({
-        id: (l as any).args.id, recipient: (l as any).args.recipient,
-        amount: (l as any).args.amount, startTime: (l as any).args.startTime,
-        endTime: (l as any).args.endTime, txHash: l.transactionHash,
-      }));
-      pushStreams(items);
-      setTab("history");
-    },
+    address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "StreamCreated",
+    enabled: !!FLUX_ADDRESS,
+    onLogs: () => { fetchStreams(); setTab("history"); },
   });
 
+  // ── Create ───────────────────────────────────────────────
   const handleCreateClick = () => {
     setCreateErr("");
     const recip = recipVal.current.trim(); const amount = amountVal.current.trim();
     const start = startVal.current.trim(); const end = endVal.current.trim();
     if (!recip) { setCreateErr("Recipient address is required"); return; }
     if (!ADDR.test(recip)) { setCreateErr("Invalid address — must be 0x followed by 40 hex characters"); return; }
-    if (!amount || parseFloat(amount) <= 0) { setCreateErr("Enter a valid USDC amount greater than 0"); return; }
+    if (!amount || parseFloat(amount) <= 0) { setCreateErr("Enter a USDC amount greater than 0"); return; }
     if (!start) { setCreateErr("Start date is required"); return; }
     if (!end) { setCreateErr("End date is required"); return; }
     if (new Date(end) <= new Date(start)) { setCreateErr("End date must be after start date"); return; }
@@ -145,13 +219,14 @@ export default function StreamsPage() {
       await writeContractAsync({ address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: "approve", args: [FLUX_ADDRESS as `0x${string}`, a] });
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "createStream", args: [snap.recip as `0x${string}`, a, BigInt(s), BigInt(e)], gas: 300_000n });
       setCTx(tx);
-    } catch (e: unknown) { setCreateErr((e as { shortMessage?: string }).shortMessage?.slice(0, 140) || "Transaction failed"); }
+    } catch (e: unknown) { setCreateErr((e as any).shortMessage?.slice(0, 140) || "Transaction failed"); }
     finally { setBusy(false); }
   };
 
+  // ── Withdraw ─────────────────────────────────────────────
   const handleWithdrawClick = () => {
     setWErr(""); const id = wIdVal.current.trim();
-    if (!id || isNaN(Number(id)) || Number(id) < 0) { setWErr("Enter a valid stream ID (number ≥ 0)"); return; }
+    if (!id || isNaN(Number(id)) || Number(id) < 0) { setWErr("Enter a valid stream ID (e.g. 0)"); return; }
     setWSnap(id); setWConfirm(true);
   };
   const doWithdraw = async () => {
@@ -159,13 +234,17 @@ export default function StreamsPage() {
     try {
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "withdrawFromStream", args: [BigInt(wSnap)], gas: 300_000n });
       setWTx(tx);
-    } catch (e: unknown) { setWErr((e as { shortMessage?: string }).shortMessage?.slice(0, 140) || "Failed"); }
+      // Optimistically mark as withdrawn; next fetchStreams will confirm from chain
+      setStreams(prev => prev.map(s => s.id.toString() === wSnap ? { ...s, status: "withdrawn" } : s));
+      setTimeout(fetchStreams, 3000); // re-fetch after 3s
+    } catch (e: unknown) { setWErr((e as any).shortMessage?.slice(0, 140) || "Failed"); }
     finally { setWBusy(false); }
   };
 
+  // ── Cancel ───────────────────────────────────────────────
   const handleCancelClick = () => {
     setCnErr(""); const id = cnIdVal.current.trim();
-    if (!id || isNaN(Number(id)) || Number(id) < 0) { setCnErr("Enter a valid stream ID (number ≥ 0)"); return; }
+    if (!id || isNaN(Number(id)) || Number(id) < 0) { setCnErr("Enter a valid stream ID (e.g. 0)"); return; }
     setCnSnap(id); setCnConfirm(true);
   };
   const doCancel = async () => {
@@ -173,54 +252,57 @@ export default function StreamsPage() {
     try {
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "cancelStream", args: [BigInt(cnSnap)], gas: 300_000n });
       setCnTx(tx);
-      // Remove cancelled stream from local list
-      if (address) {
-        const updated = history.filter(s => s.id.toString() !== cnSnap);
-        setHistory(updated); saveStreams(address, updated);
-      }
-    } catch (e: unknown) { setCnErr((e as { shortMessage?: string }).shortMessage?.slice(0, 140) || "Failed"); }
+      setStreams(prev => prev.map(s => s.id.toString() === cnSnap ? { ...s, status: "cancelled" } : s));
+      setTimeout(fetchStreams, 3000);
+    } catch (e: unknown) { setCnErr((e as any).shortMessage?.slice(0, 140) || "Failed"); }
     finally { setCnBusy(false); }
   };
 
-  // Clicking Withdraw/Cancel in table fills the input and focuses it
   const fillWithdraw = (id: string) => { wIdVal.current = id; setWId(id); setTab("create"); setTimeout(() => document.getElementById("w-id")?.focus(), 100); };
   const fillCancel   = (id: string) => { cnIdVal.current = id; setCnId(id); setTab("create"); setTimeout(() => document.getElementById("cn-id")?.focus(), 100); };
 
+  const activeCount = streams.filter(s => getDisplayStatus(s) === "active").length;
+
   return (
     <div style={{ maxWidth: 1120, margin: "0 auto", padding: "32px 24px" }}>
-      {confirm && <ConfirmModal title="Create Payment Stream" message={<div><p style={{ marginBottom: 12 }}>Confirm stream:</p><div style={{ background:"var(--bg3)", borderRadius:9, padding:"14px 16px", fontFamily:"'IBM Plex Mono',monospace", fontSize:12 }}><div style={{ marginBottom:5, wordBreak:"break-all" }}><span style={{ color:"var(--tx3)" }}>To: </span><span style={{ color:"var(--tx)" }}>{snap.recip}</span></div><div style={{ marginBottom:5 }}><span style={{ color:"var(--tx3)" }}>Amount: </span><span style={{ color:"var(--teal)", fontWeight:700 }}>${parseFloat(snap.amount).toFixed(2)} USDC</span></div><div style={{ marginBottom:5 }}><span style={{ color:"var(--tx3)" }}>Start: </span><span>{snap.start}</span></div><div><span style={{ color:"var(--tx3)" }}>End: </span><span>{snap.end}</span></div></div><p style={{ marginTop:10, fontSize:12, color:"var(--tx3)" }}>USDC locked and released linearly over the stream duration.</p></div>} confirmLabel="Create Stream" onConfirm={doCreate} onCancel={() => setConfirm(false)} />}
-      {wConfirm && <ConfirmModal title="Withdraw Vested USDC" message={<p>Claim all vested USDC from stream <strong>#{wSnap}</strong> to your wallet.</p>} confirmLabel="Withdraw" onConfirm={doWithdraw} onCancel={() => setWConfirm(false)} />}
-      {cnConfirm && <ConfirmModal title="Cancel Stream" danger message={<p>Cancel stream <strong>#{cnSnap}</strong>. Vested USDC → recipient. Unvested USDC → you. Cannot be undone.</p>} confirmLabel="Cancel Stream" onConfirm={doCancel} onCancel={() => setCnConfirm(false)} />}
+      {confirm && <ConfirmModal title="Create Payment Stream" message={<div><p style={{ marginBottom:12 }}>Confirm stream:</p><div style={{ background:"var(--bg3)", borderRadius:9, padding:"14px 16px", fontFamily:"'IBM Plex Mono',monospace", fontSize:12 }}><div style={{ marginBottom:5, wordBreak:"break-all" }}><span style={{ color:"var(--tx3)" }}>To: </span>{snap.recip}</div><div style={{ marginBottom:5 }}><span style={{ color:"var(--tx3)" }}>Amount: </span><span style={{ color:"var(--teal)", fontWeight:700 }}>${parseFloat(snap.amount).toFixed(2)} USDC</span></div><div style={{ marginBottom:5 }}><span style={{ color:"var(--tx3)" }}>Start: </span>{snap.start}</div><div><span style={{ color:"var(--tx3)" }}>End: </span>{snap.end}</div></div></div>} confirmLabel="Create Stream" onConfirm={doCreate} onCancel={() => setConfirm(false)} />}
+      {wConfirm && <ConfirmModal title="Withdraw Vested USDC" message={<p>Claim all vested USDC from stream <strong>#{wSnap}</strong>.</p>} confirmLabel="Withdraw" onConfirm={doWithdraw} onCancel={() => setWConfirm(false)} />}
+      {cnConfirm && <ConfirmModal title="Cancel Stream" danger message={<p>Cancel stream <strong>#{cnSnap}</strong>. Vested → recipient. Unvested → you.</p>} confirmLabel="Cancel Stream" onConfirm={doCancel} onCancel={() => setCnConfirm(false)} />}
 
       <div style={{ marginBottom: 22 }}>
         <h1 style={{ fontFamily:"'Manrope',sans-serif", fontSize:22, fontWeight:800, color:"var(--tx)", letterSpacing:"-0.03em", marginBottom:3 }}>Payment Streams</h1>
-        <p style={{ fontSize:13, color:"var(--tx3)", fontWeight:500 }}>Linear USDC vesting for payroll, grants, and contractor agreements.{" "}<Tooltip text="Locks USDC in contract, released linearly. Recipient withdraws anytime. Sender can cancel and recover unvested."><span style={{ color:"var(--teal)", cursor:"help", fontWeight:700 }}>How it works (?)</span></Tooltip></p>
+        <p style={{ fontSize:13, color:"var(--tx3)", fontWeight:500 }}>Linear USDC vesting for payroll, grants, and contractor agreements.</p>
       </div>
 
-      <div className="tabs" style={{ maxWidth:260, marginBottom:22 }}>
+      {/* Tabs — inline flex prevents number misalignment */}
+      <div className="tabs" style={{ maxWidth:280, marginBottom:22 }}>
         <button className={`tab ${tab==="create"?"active":""}`} onClick={() => setTab("create")}>Create</button>
-        <button className={`tab ${tab==="history"?"active":""}`} onClick={() => setTab("history")}>
-          My Streams {history.length > 0 && <span className="chip chip-teal" style={{ fontSize:9, padding:"1px 6px", marginLeft:4 }}>{history.length}</span>}
+        <button className={`tab ${tab==="history"?"active":""}`} onClick={() => setTab("history")}
+          style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <span>My Streams</span>
+          {streams.length > 0 && (
+            <span style={{ background:"var(--teal)", color:"var(--bg)", fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999, fontFamily:"'IBM Plex Mono',monospace", flexShrink:0, lineHeight:"18px" }}>
+              {streams.length}
+            </span>
+          )}
         </button>
       </div>
 
       {tab === "create" ? (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+          {/* Create form */}
           <div className="card">
             <div className="card-hd">
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <div style={{ width:24, height:24, borderRadius:6, background:"var(--teal-10)", border:"1px solid var(--teal-20)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>⚡</div>
-                <span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--tx)" }}>Create Stream</span>
-              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--teal-10)", border:"1px solid var(--teal-20)", display:"flex", alignItems:"center", justifyContent:"center" }}>⚡</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--tx)" }}>Create Stream</span></div>
             </div>
             <div className="card-p">
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
                 <div>
-                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:7 }}><label className="lbl" style={{ marginBottom:0 }}>Recipient Address</label><Tooltip text="The wallet address that will receive the streamed USDC." /></div>
+                  <label className="lbl">Recipient Address</label>
                   <input className="inp" placeholder="0x..." onChange={e => { recipVal.current = e.target.value; setCreateErr(""); }} />
                 </div>
                 <div>
-                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:7 }}><label className="lbl" style={{ marginBottom:0 }}>Total USDC Amount</label><Tooltip text="Total USDC to stream. Locked in contract and released linearly." /></div>
+                  <label className="lbl">Total USDC Amount</label>
                   <input className="inp" placeholder="1000.00" type="number" min="0" step="0.01" onChange={e => { amountVal.current = e.target.value; setPreviewAmount(e.target.value); setCreateErr(""); }} />
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -237,16 +319,18 @@ export default function StreamsPage() {
             </div>
           </div>
 
+          {/* Right column */}
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            {/* Withdraw */}
             <div className="card">
               <div className="card-hd">
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--green-10)", border:"1px solid var(--green-20)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>↓</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"#10b981" }}>Withdraw Vested</span></div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--green-10)", border:"1px solid var(--green-20)", display:"flex", alignItems:"center", justifyContent:"center" }}>↓</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"#10b981" }}>Withdraw Vested</span></div>
                 <Tooltip text="Claim your vested USDC. You must be the stream recipient." />
               </div>
               <div className="card-p">
                 <p style={{ fontSize:13, color:"var(--tx2)", marginBottom:12, lineHeight:1.55, fontWeight:500 }}>Enter your stream ID to claim vested USDC. Find IDs in the My Streams tab.</p>
                 <div style={{ display:"flex", gap:10, marginBottom:8 }}>
-                  <input id="w-id" className="inp" placeholder="Stream ID (e.g. 0)" type="number" min="0" value={wId} onChange={e => { wIdVal.current = e.target.value; setWId(e.target.value); setWErr(""); }} style={{ flex:1 }} />
+                  <input id="w-id" className="inp" placeholder="Stream ID (e.g. 4)" type="number" min="0" value={wId} onChange={e => { wIdVal.current = e.target.value; setWId(e.target.value); setWErr(""); }} style={{ flex:1 }} />
                   <button className="btn btn-primary btn-sm" onClick={handleWithdrawClick} disabled={!authenticated || wBusy} style={{ background:"#10b981", flexShrink:0 }}>{wBusy ? "…" : "Withdraw"}</button>
                 </div>
                 {wErr && <FieldError msg={wErr} />}
@@ -254,15 +338,16 @@ export default function StreamsPage() {
               </div>
             </div>
 
+            {/* Cancel */}
             <div className="card">
               <div className="card-hd">
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--red-10)", border:"1px solid rgba(239,68,68,0.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>✕</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--red)" }}>Cancel Stream</span></div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--red-10)", border:"1px solid rgba(239,68,68,0.2)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--red)" }}>Cancel Stream</span></div>
                 <Tooltip text="Only the stream sender can cancel. Vested USDC → recipient. Unvested → sender." />
               </div>
               <div className="card-p">
                 <p style={{ fontSize:13, color:"var(--tx2)", marginBottom:12, lineHeight:1.55, fontWeight:500 }}>Recipient gets vested portion. You recover unvested USDC instantly.</p>
                 <div style={{ display:"flex", gap:10, marginBottom:8 }}>
-                  <input id="cn-id" className="inp" placeholder="Stream ID (e.g. 0)" type="number" min="0" value={cnId} onChange={e => { cnIdVal.current = e.target.value; setCnId(e.target.value); setCnErr(""); }} style={{ flex:1 }} />
+                  <input id="cn-id" className="inp" placeholder="Stream ID (e.g. 4)" type="number" min="0" value={cnId} onChange={e => { cnIdVal.current = e.target.value; setCnId(e.target.value); setCnErr(""); }} style={{ flex:1 }} />
                   <button className="btn btn-danger btn-sm" onClick={handleCancelClick} disabled={!authenticated || cnBusy} style={{ flexShrink:0 }}>{cnBusy ? "…" : "Cancel"}</button>
                 </div>
                 {cnErr && <FieldError msg={cnErr} />}
@@ -270,6 +355,7 @@ export default function StreamsPage() {
               </div>
             </div>
 
+            {/* Mechanics */}
             <div className="card">
               <div className="card-hd"><div className="lbl" style={{ marginBottom:0 }}>Stream mechanics</div></div>
               <div className="card-p">
@@ -281,29 +367,57 @@ export default function StreamsPage() {
           </div>
         </div>
       ) : (
+        /* My Streams tab */
         <div className="card" style={{ overflow:"hidden" }}>
           <div className="card-hd">
-            <div className="lbl" style={{ marginBottom:0 }}>My Streams</div>
-            <span style={{ fontSize:12, color:"var(--tx3)", fontWeight:500 }}>Saved locally · {history.length} stream{history.length !== 1 ? "s" : ""}</span>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <div className="lbl" style={{ marginBottom:0 }}>My Streams</div>
+              {activeCount > 0 && <span style={{ fontSize:11, color:"var(--teal)", fontWeight:600 }}>{activeCount} active</span>}
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:12, color:"var(--tx3)", fontWeight:500 }}>Live from blockchain</span>
+              <button className="btn btn-ghost btn-sm" onClick={fetchStreams} disabled={loadingStreams} style={{ fontSize:11, padding:"2px 8px" }}>
+                {loadingStreams ? "Loading…" : "↻ Refresh"}
+              </button>
+            </div>
           </div>
-          {history.length === 0 ? (
-            <EmptyState icon="⚡" title="No streams yet" desc="Create your first stream and it will appear here." action={<button className="btn btn-primary btn-sm" onClick={() => setTab("create")}>Create a stream</button>} />
+          {loadingStreams ? (
+            <div style={{ padding: "40px 24px", textAlign:"center", color:"var(--tx3)", fontSize:14 }}>Loading streams from blockchain…</div>
+          ) : loadError ? (
+            <div style={{ padding: "24px" }}><div className="banner err">{loadError}</div></div>
+          ) : streams.length === 0 ? (
+            <EmptyState icon="⚡" title="No streams yet" desc="Create your first stream and it will appear here. Data is always live from the blockchain." action={<button className="btn btn-primary btn-sm" onClick={() => setTab("create")}>Create a stream</button>} />
           ) : (
             <div style={{ overflowX:"auto" }}>
               <table className="tbl">
-                <thead><tr><th>ID</th><th>Recipient</th><th>Amount</th><th>Start</th><th>End</th><th>Tx</th><th>Actions</th></tr></thead>
+                <thead>
+                  <tr><th>ID</th><th>Status</th><th>Recipient</th><th>Amount</th><th>Start</th><th>End</th><th>Tx</th><th>Actions</th></tr>
+                </thead>
                 <tbody>
-                  {history.map((h, i) => (
-                    <tr key={i}>
-                      <td><span className="chip chip-teal">#{h.id.toString()}</span></td>
-                      <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}><a href={explorerLink("address", h.recipient)} target="_blank" rel="noopener noreferrer" style={{ color:"var(--teal)" }}>{h.recipient.slice(0,8)}…{h.recipient.slice(-6)}</a></td>
-                      <td style={{ fontFamily:"'Manrope',sans-serif", fontWeight:700, color:"var(--teal)" }}>${formatUSDC(h.amount)}</td>
-                      <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.startTime)*1000).toLocaleDateString()}</td>
-                      <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.endTime)*1000).toLocaleDateString()}</td>
-                      <td>{h.txHash && <a href={explorerLink("tx", h.txHash)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{h.txHash.slice(0,8)}… ↗</a>}</td>
-                      <td><div style={{ display:"flex", gap:6 }}><button className="btn btn-ghost btn-sm" onClick={() => fillWithdraw(h.id.toString())}>Withdraw</button><button className="btn btn-danger btn-sm" onClick={() => fillCancel(h.id.toString())}>Cancel</button></div></td>
-                    </tr>
-                  ))}
+                  {streams.map((h, i) => {
+                    const ds = getDisplayStatus(h);
+                    const canWithdraw = ds === "active" || ds === "finished";
+                    const canCancel   = ds === "active";
+                    return (
+                      <tr key={i}>
+                        <td><span className="chip chip-teal">#{h.id.toString()}</span></td>
+                        <td><StatusBadge status={ds} /></td>
+                        <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>
+                          <a href={explorerLink("address", h.recipient)} target="_blank" rel="noopener noreferrer" style={{ color:"var(--teal)" }}>{h.recipient.slice(0,8)}…{h.recipient.slice(-6)}</a>
+                        </td>
+                        <td style={{ fontFamily:"'Manrope',sans-serif", fontWeight:700, color:"var(--teal)" }}>${formatUSDC(h.amount)}</td>
+                        <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.startTime)*1000).toLocaleDateString()}</td>
+                        <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.endTime)*1000).toLocaleDateString()}</td>
+                        <td>{h.txHash && <a href={explorerLink("tx", h.txHash)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{h.txHash.slice(0,8)}… ↗</a>}</td>
+                        <td>
+                          <div style={{ display:"flex", gap:6 }}>
+                            {canWithdraw && <button className="btn btn-ghost btn-sm" onClick={() => fillWithdraw(h.id.toString())}>Withdraw</button>}
+                            {canCancel   && <button className="btn btn-danger btn-sm" onClick={() => fillCancel(h.id.toString())}>Cancel</button>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

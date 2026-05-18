@@ -23,11 +23,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId="cmossicur025d0cl2x79izo9h"
       config={{
-        loginMethods: ["wallet", "google"],
+        loginMethods: ["wallet", "email"],
         appearance: {
           theme: "dark",
           accentColor: "#0f766e",
-          logo: "https://flux-app.vercel.app/favicon.ico",
+          logo: "https://fluxonarc.xyz/logo.png",
           walletChainType: "ethereum-only",
           showWalletLoginFirst: true,
         },
