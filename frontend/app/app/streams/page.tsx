@@ -110,38 +110,65 @@ export default function StreamsPage() {
   const { isLoading: wConf } = useWaitForTransactionReceipt({ hash: wTx });
   const { isLoading: cnConf } = useWaitForTransactionReceipt({ hash: cnTx });
 
+  // ── Chunked getLogs: handles RPC block range limits ──────
+  const fetchChunked = async (fetchFn: (from: bigint, to: bigint) => Promise<any[]>, from: bigint, to: bigint, chunkSize = 50_000n) => {
+    try {
+      return await fetchFn(from, to); // try full range first
+    } catch {
+      // RPC rejected range — split into chunks
+      const all: any[] = [];
+      let cur = from;
+      while (cur <= to) {
+        const end = cur + chunkSize - 1n < to ? cur + chunkSize - 1n : to;
+        const chunk = await fetchFn(cur, end);
+        all.push(...chunk);
+        cur = end + 1n;
+      }
+      return all;
+    }
+  };
+
   // ── Fetch ALL streams from blockchain ───────────────────
   const fetchStreams = useCallback(async () => {
     if (!address || !FLUX_ADDRESS || !publicClient) return;
     setLoadingStreams(true);
     setLoadError("");
     try {
-      // Fetch StreamCreated events for this sender
-      const created = await publicClient.getContractEvents({
-        address: FLUX_ADDRESS as `0x${string}`,
-        abi: FLUX_ABI,
-        eventName: "StreamCreated",
-        args: { sender: address as `0x${string}` },
-        fromBlock: FLUX_DEPLOY_BLOCK,
-        toBlock: "latest",
-      });
+      const toBlock = await publicClient.getBlockNumber();
+      const fromBlock = toBlock > FLUX_DEPLOY_BLOCK ? FLUX_DEPLOY_BLOCK : 0n;
 
-      // Fetch StreamCancelled events — use getLogs + parseAbiItem to avoid ABI type constraint
-      const cancelled = await publicClient.getLogs({
-        address: FLUX_ADDRESS as `0x${string}`,
-        event: parseAbiItem("event StreamCancelled(uint256 indexed id, address indexed sender, uint256 refund)"),
-        args: { sender: address as `0x${string}` },
-        fromBlock: FLUX_DEPLOY_BLOCK,
-        toBlock: "latest",
-      });
+      // Fetch StreamCreated events for this sender (chunked)
+      const created = await fetchChunked(
+        (f, t) => publicClient.getContractEvents({
+          address: FLUX_ADDRESS as `0x${string}`,
+          abi: FLUX_ABI,
+          eventName: "StreamCreated",
+          args: { sender: address as `0x${string}` },
+          fromBlock: f, toBlock: t,
+        }),
+        fromBlock, toBlock
+      );
 
-      // Fetch StreamWithdrawn events — use getLogs + parseAbiItem to avoid ABI type constraint
-      const withdrawn = await publicClient.getLogs({
-        address: FLUX_ADDRESS as `0x${string}`,
-        event: parseAbiItem("event StreamWithdrawn(uint256 indexed id, address indexed recipient, uint256 amount)"),
-        fromBlock: FLUX_DEPLOY_BLOCK,
-        toBlock: "latest",
-      });
+      // Fetch StreamCancelled events (chunked)
+      const cancelled = await fetchChunked(
+        (f, t) => publicClient.getLogs({
+          address: FLUX_ADDRESS as `0x${string}`,
+          event: parseAbiItem("event StreamCancelled(uint256 indexed id, address indexed sender, uint256 refund)"),
+          args: { sender: address as `0x${string}` },
+          fromBlock: f, toBlock: t,
+        }),
+        fromBlock, toBlock
+      );
+
+      // Fetch StreamWithdrawn events (chunked)
+      const withdrawn = await fetchChunked(
+        (f, t) => publicClient.getLogs({
+          address: FLUX_ADDRESS as `0x${string}`,
+          event: parseAbiItem("event StreamWithdrawn(uint256 indexed id, address indexed recipient, uint256 amount)"),
+          fromBlock: f, toBlock: t,
+        }),
+        fromBlock, toBlock
+      );
 
       const cancelledIds = new Set(cancelled.map(e => (e.args as any).id?.toString()));
       // Build withdrawn IDs for streams this user created (cross-reference by checking stream IDs)

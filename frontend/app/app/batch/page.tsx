@@ -58,19 +58,38 @@ export default function BatchPage() {
   const total = valid.reduce((s, r) => s + parseFloat(r.amount), 0);
   const fee   = total * 0.001;
 
+  // ── Chunked getLogs helper ────────────────────────────────
+  const fetchChunked = async (fetchFn: (f: bigint, t: bigint) => Promise<any[]>, from: bigint, to: bigint, size = 50_000n) => {
+    try { return await fetchFn(from, to); }
+    catch {
+      const all: any[] = [];
+      let cur = from;
+      while (cur <= to) {
+        const end = cur + size - 1n < to ? cur + size - 1n : to;
+        all.push(...await fetchFn(cur, end));
+        cur = end + 1n;
+      }
+      return all;
+    }
+  };
+
   // ── Fetch ALL batch history from blockchain ──────────────
   const fetchHistory = useCallback(async () => {
     if (!address || !FLUX_ADDRESS || !publicClient) return;
     setLoadingHistory(true); setHistoryError("");
     try {
-      const events = await publicClient.getContractEvents({
-        address: FLUX_ADDRESS as `0x${string}`,
-        abi: FLUX_ABI,
-        eventName: "BatchSettled",
-        args: { sender: address as `0x${string}` }, // filter by indexed sender
-        fromBlock: FLUX_DEPLOY_BLOCK,
-        toBlock: "latest",
-      });
+      const toBlock = await publicClient.getBlockNumber();
+      const fromBlock = toBlock > FLUX_DEPLOY_BLOCK ? FLUX_DEPLOY_BLOCK : 0n;
+      const events = await fetchChunked(
+        (f, t) => publicClient.getContractEvents({
+          address: FLUX_ADDRESS as `0x${string}`,
+          abi: FLUX_ABI,
+          eventName: "BatchSettled",
+          args: { sender: address as `0x${string}` },
+          fromBlock: f, toBlock: t,
+        }),
+        fromBlock, toBlock
+      );
       const items: HistoryItem[] = events
         .map(e => ({
           count:     (e.args as any).recipientCount as bigint,

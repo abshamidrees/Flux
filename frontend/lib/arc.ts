@@ -25,7 +25,8 @@ export const arcTestnet = defineChain({
 export const FLUX_ADDRESS = (process.env.NEXT_PUBLIC_FLUX_ADDRESS || "") as `0x${string}`;
 export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS || "") as `0x${string}`;
 // Approximate contract deployment block on Arc Testnet (used as fromBlock for getLogs)
-export const FLUX_DEPLOY_BLOCK = 41_000_000n;
+// Set to ~May 14 2026. If events are missing, lower this value.
+export const FLUX_DEPLOY_BLOCK = 42_100_000n;
 
 // ── USDC ABI (minimal) ────────────────────────────────────
 export const USDC_ABI = [

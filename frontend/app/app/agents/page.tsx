@@ -196,10 +196,23 @@ export default function AgentsPage() {
 
   const myPayments = payments.filter(p => !selectedAgent || p.agent.toLowerCase() === selectedAgent.toLowerCase());
 
-  // Owner wallet notice
+  // Owner wallet notice — subtle, not bright
   const OwnerNotice = () => (
-    <div className="banner warn" style={{ marginBottom: 0 }}>
-      <strong>Deployer wallet required.</strong> Both Register Agent and Fund Treasury require the contract owner wallet. Import your deployer private key into MetaMask to use these features.
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8,
+      padding: "8px 12px",
+      background: "rgba(234,179,8,0.05)",
+      border: "1px solid rgba(234,179,8,0.14)",
+      borderRadius: 8,
+      fontSize: 12, color: "rgba(234,179,8,0.6)", fontWeight: 500,
+      marginBottom: 0,
+    }}>
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink:0 }}>
+        <circle cx="6" cy="6" r="5.25" stroke="currentColor" strokeWidth="1.4"/>
+        <rect x="5.35" y="5" width="1.3" height="3.5" rx="0.65" fill="currentColor"/>
+        <circle cx="6" cy="3.2" r="0.7" fill="currentColor"/>
+      </svg>
+      Owner wallet required — use the contract deployer wallet to register agents or fund treasury.
     </div>
   );
 
