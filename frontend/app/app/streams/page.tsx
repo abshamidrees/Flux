@@ -28,24 +28,31 @@ const EV_STREAM_WITHDRAWN = parseAbiItem("event StreamWithdrawn(uint256 indexed 
 
 // ── Parallel chunked getLogs — handles any RPC block-range limit ──
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getLogsChunked(params: any, fromBlock: bigint, toBlock: bigint, chunkSize = 10_000n): Promise<any[]> {
-  // 1. Try full range first
-  try { return await rpcClient.getLogs({ ...params, fromBlock, toBlock }); } catch {}
+async function fetchChunk(params: any, f: bigint, t: bigint, retries = 3): Promise<any[]> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try { return await rpcClient.getLogs({ ...params, fromBlock: f, toBlock: t }); }
+    catch { if (attempt < retries - 1) await new Promise(r => setTimeout(r, 400 * (attempt + 1))); }
+  }
+  return []; // return empty after all retries (never crash)
+}
 
-  // 2. Build chunk list
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getLogsChunked(params: any, fromBlock: bigint, toBlock: bigint, chunkSize = 5_000n): Promise<any[]> {
+  // Always chunk — never gamble on full-range succeeding
   const chunks: Array<{ f: bigint; t: bigint }> = [];
   for (let f = fromBlock; f <= toBlock; f += chunkSize) {
     chunks.push({ f, t: f + chunkSize - 1n < toBlock ? f + chunkSize - 1n : toBlock });
   }
-
-  // 3. Fetch 8 chunks in parallel, then next 8
-  const BATCH = 8;
+  // Fetch 6 in parallel; allSettled so one failure never drops the rest
+  const BATCH = 6;
   const all: any[] = [];
   for (let i = 0; i < chunks.length; i += BATCH) {
-    const results = await Promise.all(
-      chunks.slice(i, i + BATCH).map(({ f, t }) => rpcClient.getLogs({ ...params, fromBlock: f, toBlock: t }))
+    const results = await Promise.allSettled(
+      chunks.slice(i, i + BATCH).map(({ f, t }) => fetchChunk(params, f, t))
     );
-    all.push(...results.flat());
+    for (const r of results) {
+      if (r.status === "fulfilled") all.push(...r.value);
+    }
   }
   return all;
 }
