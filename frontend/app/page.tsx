@@ -213,8 +213,6 @@ export default function Landing() {
                   background: "#0f766e", textDecoration: "none", transition: "all 0.2s",
                   boxShadow: "0 4px 20px rgba(15,118,110,0.35)",
                 }}
-                // onMouseEnter={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0d6460"; el.style.transform = "translateY(-2px)"; el.style.boxShadow = "0 10px 32px rgba(15,118,110,0.45)"; }}
-                // onMouseLeave={(e: React.MouseEvent) => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = "#0f766e"; el.style.transform = "none"; el.style.boxShadow = "0 4px 20px rgba(15,118,110,0.35)"; }}
               >
                 Launch App <Arrow size={16} color="#fff" />
               </AppLink>
@@ -393,13 +391,19 @@ export default function Landing() {
             </div>
             {[
               { title: "Product",   links: [{ l: "Batch Settlement", h: "/app/batch" }, { l: "Payment Streams", h: "/app/streams" }, { l: "Agent Registry", h: "/app/agents" }, { l: "Dashboard", h: "/app" }] },
-              { title: "Resources", links: [{ l: "Documentation", h: "https://docs.arc.network" }, { l: "GitHub", h: "https://github.com" }, { l: "ArcScan Explorer", h: "https://testnet.arcscan.app" }, { l: "Circle Faucet", h: "https://faucet.circle.com" }] },
+              // CHANGED HERE: Updated to point to /docs
+              { title: "Resources", links: [{ l: "Documentation", h: "/docs" }, { l: "GitHub", h: "https://github.com" }, { l: "ArcScan Explorer", h: "https://testnet.arcscan.app" }, { l: "Circle Faucet", h: "https://faucet.circle.com" }] },
               { title: "Ecosystem", links: [{ l: "Arc Network", h: "https://www.arc.network" }, { l: "Circle USDC", h: "https://www.circle.com" }, { l: "Builders Fund", h: "https://www.arc.network/builders-fund" }] },
             ].map(col => (
               <div key={col.title}>
                 <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#475569", marginBottom: 14 }}>{col.title}</div>
                 {col.links.map(link => (
-                  <Link key={link.l} href={link.h} onClick={link.h.startsWith("/app") ? triggerPageLoad : undefined} style={{ display: "block", fontSize: 13, color: "#64748b", textDecoration: "none", marginBottom: 9, fontWeight: 500, transition: "color 0.15s" }}
+                  <Link 
+                    key={link.l} 
+                    href={link.h} 
+                    // CHANGED HERE: Updated from .startsWith("/app") to .startsWith("/") so your loading screen works on /docs too
+                    onClick={link.h.startsWith("/") ? triggerPageLoad : undefined} 
+                    style={{ display: "block", fontSize: 13, color: "#64748b", textDecoration: "none", marginBottom: 9, fontWeight: 500, transition: "color 0.15s" }}
                     onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "#94a3b8"; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "#64748b"; }}>
                     {link.l}
