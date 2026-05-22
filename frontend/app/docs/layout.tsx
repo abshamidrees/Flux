@@ -1,3 +1,5 @@
+"use client"; // <--- ADDED THIS LINE
+
 import Link from "next/link";
 import { ReactNode } from "react";
 
