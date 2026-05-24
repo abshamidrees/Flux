@@ -35,7 +35,7 @@ export function Arrow({ size = 16, color = "currentColor" }: { size?: number; co
 }
 
 /* ─── Tooltip — fixed: horizontal, clean corners ─────────── */
-export function Tooltip({ text, children }: { text: string; children: ReactNode }) {
+export function Tooltip({ text, children }: { text: string; children?: ReactNode }) {
   const [visible, setVisible] = useState(false);
   const [flip, setFlip]       = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
@@ -49,20 +49,29 @@ export function Tooltip({ text, children }: { text: string; children: ReactNode 
   return (
     <span
       ref={ref}
-      style={{ position: "relative", display: "inline" }}
+      style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
       onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}
     >
-      {/* Dotted underline on the children text */}
-      <span style={{
-        textDecoration: "underline",
-        textDecorationStyle: "dotted",
-        textDecorationColor: "var(--tx3, rgba(255,255,255,0.35))",
-        textUnderlineOffset: "3px",
-        cursor: "help",
-      }}>
-        {children}
-      </span>
+      {children != null ? (
+        <span style={{
+          textDecoration: "underline",
+          textDecorationStyle: "dotted",
+          textDecorationColor: "var(--tx3, rgba(255,255,255,0.35))",
+          textUnderlineOffset: "3px",
+          cursor: "help",
+        }}>
+          {children}
+        </span>
+      ) : (
+        <span style={{
+          width: 16, height: 16, borderRadius: "50%",
+          background: "var(--bg4, #1c2235)", border: "1px solid var(--bdr2, #2a3655)",
+          color: "var(--tx3, #4a5470)", fontSize: 10, fontWeight: 700,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          cursor: "help", flexShrink: 0, lineHeight: 1,
+        }}>?</span>
+      )}
 
       {/* Tooltip panel */}
       {visible && (
