@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useRef, useEffect } from "react";
 import { useAccount } from "wagmi";
 import { arcTestnet } from "../lib/arc";
 
@@ -35,57 +35,76 @@ export function Arrow({ size = 16, color = "currentColor" }: { size?: number; co
 }
 
 /* ─── Tooltip — fixed: horizontal, clean corners ─────────── */
-export function Tooltip({ text, children }: { text: string; children?: ReactNode }) {
-  const [show, setShow] = useState(false);
+export function Tooltip({ text, children }: { text: string; children: ReactNode }) {
+  const [visible, setVisible] = useState(false);
+  const [flip, setFlip]       = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!visible || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    setFlip(r.top < 150);
+  }, [visible]);
+
   return (
     <span
-      style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
+      ref={ref}
+      style={{ position: "relative", display: "inline" }}
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}
     >
-      {children ?? (
-        <span style={{
-          width: 16, height: 16, borderRadius: "50%",
-          background: "var(--bg4, #1c2235)", border: "1px solid var(--bdr2, #2a3655)",
-          color: "var(--tx3, #4a5470)", fontSize: 10, fontWeight: 700,
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          cursor: "default", flexShrink: 0, lineHeight: 1,
-        }}>?</span>
-      )}
-      {show && (
+      {/* Dotted underline on the children text */}
+      <span style={{
+        textDecoration: "underline",
+        textDecorationStyle: "dotted",
+        textDecorationColor: "var(--tx3, rgba(255,255,255,0.35))",
+        textUnderlineOffset: "3px",
+        cursor: "help",
+      }}>
+        {children}
+      </span>
+
+      {/* Tooltip panel */}
+      {visible && (
         <span style={{
           position: "absolute",
-          bottom: "calc(100% + 10px)",
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 9000,
-          background: "#0f172a",
-          color: "#e2e8f0",
-          fontFamily: "'Manrope', sans-serif",
-          fontSize: 12,
-          fontWeight: 500,
-          lineHeight: 1.5,
-          padding: "8px 12px",
-          borderRadius: 8,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
-          whiteSpace: "normal",
-          width: "max-content",
-          maxWidth: 220,
-          textAlign: "center",
-          pointerEvents: "none",
+          [flip ? "top" : "bottom"]: "calc(100% + 9px)",
+          left: "0",
+          zIndex: 9999,
           display: "block",
+          width: 230,
+          pointerEvents: "none",
         }}>
-          {text}
-          {/* Arrow pointing down */}
+          {/* Arrow */}
           <span style={{
             position: "absolute",
-            top: "100%", left: "50%",
-            transform: "translateX(-50%)",
-            width: 0, height: 0,
-            borderLeft: "6px solid transparent",
-            borderRight: "6px solid transparent",
-            borderTop: "6px solid #0f172a",
+            [flip ? "bottom" : "top"]: -5,
+            left: 12,
+            display: "block",
+            width: 8,
+            height: 8,
+            background: "var(--bg2, #1a1d24)",
+            border: "1px solid var(--bdr2, rgba(255,255,255,0.1))",
+            borderRadius: 2,
+            transform: flip ? "rotate(225deg)" : "rotate(45deg)",
           }} />
+          {/* Box */}
+          <span style={{
+            display: "block",
+            background: "var(--bg2, #1a1d24)",
+            border: "1px solid var(--bdr2, rgba(255,255,255,0.1))",
+            borderRadius: 10,
+            padding: "9px 12px",
+            fontSize: 12,
+            color: "var(--tx2, #9ca3b0)",
+            fontWeight: 500,
+            lineHeight: 1.6,
+            fontFamily: "'Manrope', sans-serif",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.45)",
+            letterSpacing: "-0.01em",
+          }}>
+            {text}
+          </span>
         </span>
       )}
     </span>

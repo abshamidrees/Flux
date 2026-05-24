@@ -2,70 +2,19 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent } from "wagmi";
-import { createPublicClient, http, parseAbiItem } from "viem";
+import { fetchStreams, type StreamRecord } from "../../../lib/blockchain";
 import { usePrivy } from "@privy-io/react-auth";
 import {
   FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS,
-  parseUSDC, formatUSDC, explorerLink, FLUX_DEPLOY_BLOCK
-} from "../../../lib/arc";
-import { Tooltip, ConfirmModal, EmptyState, TxBanner } from "../../../components/UI";
-
-// ── Standalone viem client — bypasses wagmi/Privy hook issues ──
-const rpcClient = createPublicClient({
-  chain: {
-    id: 5042002,
-    name: "Arc Testnet",
-    nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 6 },
-    rpcUrls: { default: { http: ["https://rpc.testnet.arc.network"] } },
-  } as any,
-  transport: http("https://rpc.testnet.arc.network"),
-});
-
-// ── Inline event ABIs — no dependency on FLUX_ABI type ──
-const EV_STREAM_CREATED   = parseAbiItem("event StreamCreated(uint256 indexed id, address indexed sender, address indexed recipient, uint256 amount, uint64 startTime, uint64 endTime)");
-const EV_STREAM_CANCELLED = parseAbiItem("event StreamCancelled(uint256 indexed id, address indexed sender, uint256 refund)");
-const EV_STREAM_WITHDRAWN = parseAbiItem("event StreamWithdrawn(uint256 indexed id, address indexed recipient, uint256 amount)");
-
-// ── Parallel chunked getLogs — handles any RPC block-range limit ──
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchChunk(params: any, f: bigint, t: bigint, retries = 3): Promise<any[]> {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try { return await rpcClient.getLogs({ ...params, fromBlock: f, toBlock: t }); }
-    catch { if (attempt < retries - 1) await new Promise(r => setTimeout(r, 400 * (attempt + 1))); }
-  }
-  return []; // return empty after all retries (never crash)
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getLogsChunked(params: any, fromBlock: bigint, toBlock: bigint, chunkSize = 5_000n): Promise<any[]> {
-  // Always chunk — never gamble on full-range succeeding
-  const chunks: Array<{ f: bigint; t: bigint }> = [];
-  for (let f = fromBlock; f <= toBlock; f += chunkSize) {
-    chunks.push({ f, t: f + chunkSize - 1n < toBlock ? f + chunkSize - 1n : toBlock });
-  }
-  // Fetch 6 in parallel; allSettled so one failure never drops the rest
-  const BATCH = 6;
-  const all: any[] = [];
-  for (let i = 0; i < chunks.length; i += BATCH) {
-    const results = await Promise.allSettled(
-      chunks.slice(i, i + BATCH).map(({ f, t }) => fetchChunk(params, f, t))
-    );
-    for (const r of results) {
-      if (r.status === "fulfilled") all.push(...r.value);
-    }
-  }
-  return all;
-}
+  parseUSDC, formatUSDC, explorerLink,
+} from "@/lib/arc";
+import { ConfirmModal, EmptyState, TxBanner } from "../../../components/UI";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 
 type StreamStatus = "active" | "finished" | "cancelled" | "withdrawn";
-interface StreamItem {
-  id: bigint; recipient: string; amount: bigint;
-  startTime: bigint; endTime: bigint; txHash?: string; status: StreamStatus;
-}
 
-function getDisplayStatus(s: StreamItem): StreamStatus {
+function getDisplayStatus(s: StreamRecord): StreamStatus {
   if (s.status === "cancelled" || s.status === "withdrawn") return s.status;
   if (Number(s.endTime) * 1000 < Date.now()) return "finished";
   return "active";
@@ -116,7 +65,7 @@ export default function StreamsPage() {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const [tab, setTab] = useState<"create" | "history">("create");
-  const [streams, setStreams] = useState<StreamItem[]>([]);
+  const [streams, setStreams] = useState<StreamRecord[]>([]);
   const [loadingStreams, setLoadingStreams] = useState(false);
   const [loadError, setLoadError] = useState("");
 
@@ -140,57 +89,26 @@ export default function StreamsPage() {
   const { isLoading: wConf } = useWaitForTransactionReceipt({ hash: wTx });
   const { isLoading: cnConf } = useWaitForTransactionReceipt({ hash: cnTx });
 
-  // ── Fetch ALL streams from blockchain ─────────────────────
-  const fetchStreams = useCallback(async () => {
+  // ── Fetch streams via ArcScan API (instant, pre-indexed) ──
+  const loadStreams = useCallback(async () => {
     if (!address || !FLUX_ADDRESS) return;
     setLoadingStreams(true); setLoadError("");
     try {
-      const addr = FLUX_ADDRESS as `0x${string}`;
-      const toBlock = await rpcClient.getBlockNumber();
-      const fromBlock = toBlock > FLUX_DEPLOY_BLOCK ? FLUX_DEPLOY_BLOCK : 0n;
-
-      // All 3 queries run in parallel
-      const [created, cancelled, withdrawn] = await Promise.all([
-        getLogsChunked({ address: addr, event: EV_STREAM_CREATED,   args: { sender: address as `0x${string}` } }, fromBlock, toBlock),
-        getLogsChunked({ address: addr, event: EV_STREAM_CANCELLED, args: { sender: address as `0x${string}` } }, fromBlock, toBlock),
-        getLogsChunked({ address: addr, event: EV_STREAM_WITHDRAWN }, fromBlock, toBlock),
-      ]);
-
-      const cancelledIds = new Set((cancelled as any[]).map((e: any) => e.args?.id?.toString()));
-      const createdIds   = new Set((created as any[]).map((e: any) => e.args?.id?.toString()));
-      const withdrawnIds = new Set((withdrawn as any[]).filter((e: any) => createdIds.has(e.args?.id?.toString())).map((e: any) => e.args?.id?.toString()));
-
-      const order: Record<string, number> = { active: 0, finished: 1, withdrawn: 2, cancelled: 3 };
-      const items: StreamItem[] = (created as any[])
-        .map((e: any) => {
-          const a = e.args;
-          const idStr = a?.id?.toString();
-          return {
-            id: a?.id as bigint, recipient: a?.recipient, amount: a?.amount,
-            startTime: a?.startTime, endTime: a?.endTime,
-            txHash: e.transactionHash ?? undefined,
-            status: (cancelledIds.has(idStr) ? "cancelled" : withdrawnIds.has(idStr) ? "withdrawn" : "active") as StreamStatus,
-          };
-        })
-        .sort((a, b) => {
-          const sa = getDisplayStatus(a), sb = getDisplayStatus(b);
-          if (sa !== sb) return order[sa] - order[sb];
-          return Number(b.id) - Number(a.id);
-        });
-
+      const items = await fetchStreams(address);
       setStreams(items);
-    } catch (err: any) {
-      console.error("fetchStreams error:", err);
-      setLoadError(`Error: ${(err?.message || String(err)).slice(0, 120)}`);
+    } catch (err: unknown) {
+      console.error("loadStreams:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setLoadError(`Could not load streams: ${msg.slice(0, 100)}`);
     } finally { setLoadingStreams(false); }
   }, [address]);
 
-  useEffect(() => { fetchStreams(); }, [fetchStreams]);
+  useEffect(() => { loadStreams(); }, [loadStreams]);
 
   useWatchContractEvent({
     address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "StreamCreated",
     enabled: !!FLUX_ADDRESS,
-    onLogs: () => { fetchStreams(); setTab("history"); },
+    onLogs: () => { loadStreams(); setTab("history"); },
   });
 
   // ── Create ────────────────────────────────────────────────
@@ -235,7 +153,7 @@ export default function StreamsPage() {
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "withdrawFromStream", args: [BigInt(wSnap)], gas: 300_000n });
       setWTx(tx);
       setStreams(prev => prev.map(s => s.id.toString() === wSnap ? { ...s, status: "withdrawn" } : s));
-      setTimeout(fetchStreams, 3000);
+      setTimeout(loadStreams, 3000);
     } catch (e: unknown) { setWErr((e as any).shortMessage?.slice(0, 140) || "Failed"); }
     finally { setWBusy(false); }
   };
@@ -252,7 +170,7 @@ export default function StreamsPage() {
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "cancelStream", args: [BigInt(cnSnap)], gas: 300_000n });
       setCnTx(tx);
       setStreams(prev => prev.map(s => s.id.toString() === cnSnap ? { ...s, status: "cancelled" } : s));
-      setTimeout(fetchStreams, 3000);
+      setTimeout(loadStreams, 3000);
     } catch (e: unknown) { setCnErr((e as any).shortMessage?.slice(0, 140) || "Failed"); }
     finally { setCnBusy(false); }
   };
@@ -348,7 +266,7 @@ export default function StreamsPage() {
             </div>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               <span style={{ fontSize:12, color:"var(--tx3)", fontWeight:500 }}>Live from blockchain</span>
-              <button className="btn btn-ghost btn-sm" onClick={fetchStreams} disabled={loadingStreams} style={{ fontSize:11, padding:"2px 8px" }}>{loadingStreams ? "Loading…" : "↻ Refresh"}</button>
+              <button className="btn btn-ghost btn-sm" onClick={loadStreams} disabled={loadingStreams} style={{ fontSize:11, padding:"2px 8px" }}>{loadingStreams ? "Loading…" : "↻ Refresh"}</button>
             </div>
           </div>
           {loadingStreams ? (
@@ -356,7 +274,7 @@ export default function StreamsPage() {
           ) : loadError ? (
             <div style={{ padding:"24px" }}>
               <div className="banner err" style={{ marginBottom:12 }}>{loadError}</div>
-              <button className="btn btn-ghost btn-sm" onClick={fetchStreams}>Try again</button>
+              <button className="btn btn-ghost btn-sm" onClick={loadStreams}>Try again</button>
             </div>
           ) : streams.length === 0 ? (
             <EmptyState icon="⚡" title="No streams yet" desc="Create your first stream and it will appear here. Data loads live from the blockchain." action={<button className="btn btn-primary btn-sm" onClick={() => setTab("create")}>Create a stream</button>} />

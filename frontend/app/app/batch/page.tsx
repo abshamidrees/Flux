@@ -2,60 +2,16 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent } from "wagmi";
-import { createPublicClient, http, parseAbiItem } from "viem";
 import { readContract } from "wagmi/actions";
+import { fetchBatchHistory, type BatchRecord } from "../../../lib/blockchain";
 import { usePrivy } from "@privy-io/react-auth";
 import Papa from "papaparse";
-import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, explorerLink, FLUX_DEPLOY_BLOCK } from "../../../lib/arc";
+import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, explorerLink } from "@/lib/arc";
 import { wagmiConfig } from "../../providers";
 import { Tooltip, ConfirmModal, EmptyState, TxBanner } from "../../../components/UI";
 
-// ── Standalone viem client — bypasses wagmi/Privy hook issues ──
-const rpcClient = createPublicClient({
-  chain: {
-    id: 5042002,
-    name: "Arc Testnet",
-    nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 6 },
-    rpcUrls: { default: { http: ["https://rpc.testnet.arc.network"] } },
-  } as any,
-  transport: http("https://rpc.testnet.arc.network"),
-});
-
-const EV_BATCH_SETTLED = parseAbiItem("event BatchSettled(address indexed sender, uint256 recipientCount, uint256 totalUSDC, uint256 fee, uint256 timestamp)");
-
-// ── Parallel chunked getLogs ──
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchChunk(params: any, f: bigint, t: bigint, retries = 3): Promise<any[]> {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try { return await rpcClient.getLogs({ ...params, fromBlock: f, toBlock: t }); }
-    catch { if (attempt < retries - 1) await new Promise(r => setTimeout(r, 400 * (attempt + 1))); }
-  }
-  return []; // return empty after all retries (never crash)
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getLogsChunked(params: any, fromBlock: bigint, toBlock: bigint, chunkSize = 5_000n): Promise<any[]> {
-  // Always chunk — never gamble on full-range succeeding
-  const chunks: Array<{ f: bigint; t: bigint }> = [];
-  for (let f = fromBlock; f <= toBlock; f += chunkSize) {
-    chunks.push({ f, t: f + chunkSize - 1n < toBlock ? f + chunkSize - 1n : toBlock });
-  }
-  // Fetch 6 in parallel; allSettled so one failure never drops the rest
-  const BATCH = 6;
-  const all: any[] = [];
-  for (let i = 0; i < chunks.length; i += BATCH) {
-    const results = await Promise.allSettled(
-      chunks.slice(i, i + BATCH).map(({ f, t }) => fetchChunk(params, f, t))
-    );
-    for (const r of results) {
-      if (r.status === "fulfilled") all.push(...r.value);
-    }
-  }
-  return all;
-}
-
 interface Row { address: string; amount: string; valid: boolean; error?: string; }
-interface HistoryItem { count: bigint; totalUSDC: bigint; fee: bigint; timestamp: bigint; txHash?: string; }
+
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 
@@ -85,7 +41,7 @@ export default function BatchPage() {
   const [drag, setDrag]           = useState(false);
   const [confirm, setConfirm]     = useState(false);
   const [tab, setTab]             = useState<"settle" | "history">("settle");
-  const [history, setHistory]     = useState<HistoryItem[]>([]);
+  const [history, setHistory]     = useState<BatchRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyError, setHistoryError]     = useState("");
 
@@ -97,33 +53,16 @@ export default function BatchPage() {
   const total = valid.reduce((s, r) => s + parseFloat(r.amount), 0);
   const fee   = total * 0.001;
 
-  // ── Fetch batch history from blockchain ───────────────────
+  // ── Fetch batch history via ArcScan API (instant, pre-indexed) ──
   const fetchHistory = useCallback(async () => {
     if (!address || !FLUX_ADDRESS) return;
     setLoadingHistory(true); setHistoryError("");
     try {
-      const toBlock   = await rpcClient.getBlockNumber();
-      const fromBlock = toBlock > FLUX_DEPLOY_BLOCK ? FLUX_DEPLOY_BLOCK : 0n;
-
-      const logs = await getLogsChunked(
-        { address: FLUX_ADDRESS as `0x${string}`, event: EV_BATCH_SETTLED, args: { sender: address as `0x${string}` } },
-        fromBlock, toBlock
-      );
-
-      const items: HistoryItem[] = (logs as any[])
-        .map((e: any) => ({
-          count:     e.args?.recipientCount as bigint,
-          totalUSDC: e.args?.totalUSDC as bigint,
-          fee:       e.args?.fee as bigint,
-          timestamp: e.args?.timestamp as bigint,
-          txHash:    e.transactionHash ?? undefined,
-        }))
-        .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
-
+      const items = await fetchBatchHistory(address);
       setHistory(items);
     } catch (err: any) {
-      console.error("fetchHistory error:", err);
-      setHistoryError(`Error: ${(err?.message || String(err)).slice(0, 120)}`);
+      console.error("fetchHistory:", err);
+      setHistoryError(`Could not load history: ${(err?.message || String(err)).slice(0, 100)}`);
     } finally { setLoadingHistory(false); }
   }, [address]);
 
@@ -133,7 +72,7 @@ export default function BatchPage() {
     address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "BatchSettled",
     enabled: !!FLUX_ADDRESS,
     onLogs: (logs) => {
-      const mine = logs.filter(l => (l as any).args?.sender?.toLowerCase() === address?.toLowerCase());
+      const mine = logs.filter((l: { args?: { sender?: string } }) => l.args?.sender?.toLowerCase() === address?.toLowerCase());
       if (mine.length > 0) setTimeout(fetchHistory, 2000);
     },
   });

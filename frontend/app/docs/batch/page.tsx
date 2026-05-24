@@ -1,3 +1,4 @@
+import React from "react";
 function H1({ c }: { c: React.ReactNode }) { return <h1 style={{ fontFamily:"'Manrope',sans-serif", fontSize:28, fontWeight:800, color:"var(--tx)", letterSpacing:"-0.03em", marginBottom:10, marginTop:0 }}>{c}</h1>; }
 function H2({ c }: { c: React.ReactNode }) { return <h2 style={{ fontFamily:"'Manrope',sans-serif", fontSize:18, fontWeight:800, color:"var(--tx)", marginTop:36, marginBottom:8 }}>{c}</h2>; }
 function P({ c }: { c: React.ReactNode }) { return <p style={{ fontSize:14, color:"var(--tx2)", lineHeight:1.75, fontWeight:500, marginBottom:14 }}>{c}</p>; }
