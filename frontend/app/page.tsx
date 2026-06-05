@@ -267,7 +267,7 @@ export default function Landing() {
       </section>
 
       {/* ══ FEATURES ══════════════════════════════════════ */}
-      <section id="features" style={{ background: "#f8fafc", padding: "96px 32px" }}>
+      <section id="features" style={{ background: "#14b8a6", padding: "96px 32px" }}>
         <div style={{ maxWidth: 1160, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center" }}>
           <div>
             <div style={{ display: "inline-block", fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#0f766e", background: "rgba(15,118,110,0.08)", padding: "5px 14px", borderRadius: 100, marginBottom: 16 }}>Features</div>
@@ -292,8 +292,7 @@ export default function Landing() {
               { title: "Batch Settlement", desc: "Send USDC to 500 wallets in a single transaction. Payroll, grants, airdrops.", tag: "v1", tc: "#0f766e" },
               { title: "Payment Streams",  desc: "Linear USDC vesting for payroll and contractor agreements. Cancel anytime.", tag: "v1", tc: "#0f766e" },
               { title: "Agent Registry",   desc: "Register AI wallets with USDC spending caps for autonomous agent commerce.", tag: "v1", tc: "#0f766e" },
-              { title: "History & Audit",  desc: "Full event history per section with CSV export. Real-time event watching.", tag: "v1", tc: "#8b5cf6" },
-              { title: "Privacy Mode",     desc: "Encrypt salary amounts — recipients cannot see each other's pay.", tag: "v2", tc: "#f59e0b" },
+              
             ].map(f => (
               <div key={f.title} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "16px 20px", display: "flex", gap: 14, cursor: "default", transition: "all 0.2s" }}
                 onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.07)"; el.style.transform = "translateX(4px)"; }}
@@ -392,8 +391,8 @@ export default function Landing() {
             {[
               { title: "Product",   links: [{ l: "Batch Settlement", h: "/app/batch" }, { l: "Payment Streams", h: "/app/streams" }, { l: "Agent Registry", h: "/app/agents" }, { l: "Dashboard", h: "/app" }] },
               // CHANGED HERE: Updated to point to /docs
-              { title: "Resources", links: [{ l: "Documentation", h: "/docs" }, { l: "GitHub", h: "https://github.com" }, { l: "ArcScan Explorer", h: "https://testnet.arcscan.app" }, { l: "Circle Faucet", h: "https://faucet.circle.com" }] },
-              { title: "Ecosystem", links: [{ l: "Arc Network", h: "https://www.arc.network" }, { l: "Circle USDC", h: "https://www.circle.com" }, { l: "Builders Fund", h: "https://www.arc.network/builders-fund" }] },
+              { title: "Resources", links: [{ l: "Documentation", h: "/docs" }, { l: "ArcScan Explorer", h: "https://testnet.arcscan.app" }, { l: "Circle Faucet", h: "https://faucet.circle.com" }] },
+              { title: "Ecosystem", links: [{ l: "Arc Network", h: "https://www.arc.network" }, { l: "Circle USDC", h: "https://www.circle.com" }] },
             ].map(col => (
               <div key={col.title}>
                 <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#475569", marginBottom: 14 }}>{col.title}</div>

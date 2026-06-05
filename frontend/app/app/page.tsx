@@ -79,7 +79,7 @@ export default function Dashboard() {
   const myAgentCount = allAgents ? (allAgents as string[]).length : null;
 
   return (
-    <div style={{ maxWidth:1120, margin:"0 auto", padding:"32px 24px" }}>
+    <div className="page-pad" style={{ maxWidth:1120, margin:"0 auto", padding:"32px 24px" }}>
 
       {/* Header */}
       <div style={{ marginBottom:26, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -101,7 +101,7 @@ export default function Dashboard() {
       {showGlobal && (
         <div style={{ marginBottom:20 }}>
           <div className="lbl" style={{ marginBottom:10 }}>PLATFORM STATS</div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10 }}>
+          <div className="grid-stats" style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10 }}>
             <StatCard label="Total Settled"  value={volume}  sub="All time"    loading={statsLoading} tip="Total USDC batch-settled through this contract." />
             <StatCard label="Fees Collected" value={fees}    sub="0.1% of vol" loading={statsLoading} tip="Accumulated platform fees at 0.1% per batch." />
             <StatCard label="Batches"        value={batches} sub="Settlements" loading={statsLoading} tip="Total batch settlement transactions executed." />
@@ -118,7 +118,7 @@ export default function Dashboard() {
         </div>
       ) : (
         /* User summary — live from blockchain */
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:20 }}>
+        <div className="grid-user" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:20 }}>
 
           {/* Address */}
           <div className="stat-card">
@@ -156,7 +156,7 @@ export default function Dashboard() {
       {/* Actions */}
       <div style={{ marginBottom:24 }}>
         <div className="lbl" style={{ marginBottom:12 }}>ACTIONS</div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+        <div className="grid-1-mobile" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
           <ActionCard href="/app/batch"   emoji="📋" title="Batch Settlement"  desc="Send USDC to up to 500 recipients in a single transaction. Import CSV or add manually." primary />
           <ActionCard href="/app/streams" emoji="⚡" title="Payment Streams"   desc="Linear USDC vesting for payroll, contractor agreements, and token grants. Cancel anytime." />
           <ActionCard href="/app/agents"  emoji="🤖" title="Agent Registry"    desc="Register AI wallets with USDC spending caps for fully autonomous onchain commerce." />

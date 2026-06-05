@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from "react";
 import { USDC_ADDRESS, shortAddress, arcTestnet } from "../../lib/arc";
 import { FluxMark, NetworkBanner } from "../../components/UI";
 import { LoadingScreen } from "../../components/LoadingScreen";
+import { NotificationBell } from "../../components/NotificationBell";
 
 const NAV = [
   { href: "/app",         label: "Dashboard" },
@@ -182,16 +183,9 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
 
         {/* Right */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Arc badge */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 5,
-            fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700,
-            color: "var(--teal)", background: "var(--teal-10)",
-            border: "1px solid var(--teal-20)",
-            padding: "4px 10px", borderRadius: 6, letterSpacing: "0.05em",
-          }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--teal)", animation: "pingDot 2.2s ease-in-out infinite" }} />
-            ARC TESTNET
+          {/* Notification Bell */}
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <NotificationBell />
           </div>
 
           {/* Theme toggle */}
