@@ -249,17 +249,26 @@ export default function Landing() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
             {[
               { n: "01", icon: "🔑", title: "Connect & approve", desc: "Add Arc testnet to MetaMask. Approve USDC once. Flux handles everything — no per-transaction approvals.", color: "#0f766e" },
-              { n: "02", icon: "📋", title: "Upload recipients",  desc: "Drag a CSV or add wallets manually. Flux validates every address and calculates totals including the 0.1% fee.", color: "#f59e0b" },
-              { n: "03", icon: "⚡", title: "Settle in one tx",   desc: "One transaction. Sub-second Arc finality. USDC reaches every wallet simultaneously. Explorer link instant.", color: "#8b5cf6" },
+              { n: "02", icon: "📋", title: "Upload recipients",  desc: "Drag a CSV or add wallets manually. Flux validates every address and calculates totals including the 0.1% fee.", color: "#0f766e" },
+              { n: "03", icon: "⚡", title: "Settle in one tx",   desc: "One transaction. Sub-second Arc finality. USDC reaches every wallet simultaneously. Explorer link instant.", color: "#0f766e" },
             ].map(s => (
-              <div key={s.n} className="land-card" style={{ position: "relative" }}>
+              <div 
+                key={s.n} 
+                className="land-card" 
+                style={{ 
+                  position: "relative", 
+                  backgroundColor: "#CCF6EC", /* Changed card background here */
+                  padding: "24px",            /* Added standard padding just in case land-card styling needs a baseline layout */
+                  borderRadius: "12px"        /* Clean matching border radius */
+                }}
+              >
                 <div style={{ position: "absolute", top: 22, right: 22, width: 26, height: 26, borderRadius: "50%", background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color }} />
                 </div>
                 <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: s.color, marginBottom: 18, opacity: 0.7 }}>{s.n}</div>
                 <div style={{ fontSize: 28, marginBottom: 14 }}>{s.icon}</div>
                 <h3 style={{ fontFamily: "'Manrope',sans-serif", fontSize: 18, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.02em", marginBottom: 8 }}>{s.title}</h3>
-                <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.65 }}>{s.desc}</p>
+                <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.65 }}>{s.desc}</p>
               </div>
             ))}
           </div>
@@ -267,7 +276,7 @@ export default function Landing() {
       </section>
 
       {/* ══ FEATURES ══════════════════════════════════════ */}
-      <section id="features" style={{ background: "#14b8a6", padding: "96px 32px" }}>
+      <section id="features" style={{ background: "#acc6e9", padding: "96px 32px" }}>
         <div style={{ maxWidth: 1160, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center" }}>
           <div>
             <div style={{ display: "inline-block", fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#0f766e", background: "rgba(15,118,110,0.08)", padding: "5px 14px", borderRadius: 100, marginBottom: 16 }}>Features</div>
