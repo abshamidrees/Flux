@@ -327,61 +327,73 @@ a { text-decoration: none; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 3px; }
 
-/* ── Responsive grid utilities ─────────────────────────────────────────── */
-.grid-1-mobile  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.grid-2-mobile  { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.grid-stats     { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-.grid-user      { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+/* ── REPLACE the responsive section at the bottom with this ── */
+/* (delete old grid-1-mobile etc. section and paste this instead) */
 
-/* ── Mobile overrides ───────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  /* Grids collapse to 1 column */
-  .grid-1-mobile  { grid-template-columns: 1fr; }
-  .grid-2-mobile  { grid-template-columns: 1fr; }
-  .grid-stats     { grid-template-columns: 1fr 1fr; }
-  .grid-user      { grid-template-columns: 1fr; }
-
-  /* Cards get tighter padding */
-  .card-p  { padding: 14px !important; }
-  .card-hd { padding: 11px 14px !important; }
-  .stat-card { padding: 14px !important; }
-
-  /* Stat numbers smaller */
-  .stat-num { font-size: 22px !important; }
-
-  /* Page padding */
-  .page-pad { padding: 18px 14px !important; }
-
-  /* Tabs full width on mobile */
-  .tabs { max-width: 100% !important; }
-
-  /* Buttons smaller on mobile */
-  .btn-full { padding: 11px !important; }
-
-  /* Input slightly smaller */
-  .inp { padding: 9px 11px !important; font-size: 14px !important; }
-
-  /* Hide secondary nav items on very small screens */
-  .nav-hide-sm { display: none !important; }
-
-  /* Streams/batch 2-col form becomes 1-col */
-  .form-grid-2 { grid-template-columns: 1fr !important; }
-
-  /* App title sizing */
-  h1.page-title { font-size: 18px !important; }
-
-  /* Table font smaller */
-  .tbl th, .tbl td { font-size: 11px !important; padding: 10px 10px !important; }
-
-  /* Modal full width */
-  .modal-box { width: calc(100vw - 32px) !important; max-width: none !important; }
-
-  /* Banner full width */
-  .net-banner { margin: 10px 14px 0 !important; border-radius: 10px !important; }
+/* Complete grid utilities — own display + columns so inline style is not needed */
+.grid-1-mobile {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.grid-2-mobile {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.grid-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+.grid-user {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.page-pad {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+.batch-grid {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 16px;
 }
 
+@media (max-width: 900px) {
+  .batch-grid { grid-template-columns: 1fr; }
+  .grid-1-mobile { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-grid-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .grid-1-mobile  { grid-template-columns: 1fr; gap: 10px; }
+  .grid-2-mobile  { grid-template-columns: 1fr; }
+  .grid-stats     { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid-user      { grid-template-columns: 1fr; }
+  .form-grid-2    { grid-template-columns: 1fr; }
+  .page-pad       { padding: 18px 14px; }
+  .card-p         { padding: 14px; }
+  .card-hd        { padding: 11px 14px; }
+  .stat-card      { padding: 14px; }
+  .stat-num       { font-size: 22px; }
+  .tabs           { max-width: 100%; }
+  .btn-full       { padding: 11px; }
+  .inp            { font-size: 14px; }
+  .nav-hide-sm    { display: none; }
+  .modal-box      { width: calc(100vw - 32px); max-width: none; }
+  .net-banner     { margin: 10px 14px 0; }
+  .tbl th, .tbl td { font-size: 11px; padding: 8px 10px; }
+}
 @media (max-width: 480px) {
   .grid-stats { grid-template-columns: 1fr; }
-  .stat-num   { font-size: 20px !important; }
-  .page-pad   { padding: 14px 12px !important; }
+  .stat-num   { font-size: 20px; }
+  .page-pad   { padding: 14px 12px; }
+  .grid-1-mobile { grid-template-columns: 1fr; }
 }
