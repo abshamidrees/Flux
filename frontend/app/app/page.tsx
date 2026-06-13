@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import { FLUX_ABI, FLUX_ADDRESS, formatUSDC, explorerLink } from "../../lib/arc";
 import { fetchStreams, fetchBatchHistory } from "../../lib/blockchain";
 import { Skeleton, Tooltip, EmptyState } from "../../components/UI";
+import { IconBatch, IconStream, IconAgent, IconPlug } from "../../components/icons";
+import { ReactNode } from "react";
 
 function StatCard({ label, value, sub, loading, tip }: { label: string; value: string; sub?: string; loading?: boolean; tip?: string }) {
   return (
@@ -22,7 +24,7 @@ function StatCard({ label, value, sub, loading, tip }: { label: string; value: s
   );
 }
 
-function ActionCard({ href, emoji, title, desc, primary }: { href: string; emoji: string; title: string; desc: string; primary?: boolean }) {
+function ActionCard({ href, icon, title, desc, primary }: { href: string; icon: ReactNode; title: string; desc: string; primary?: boolean }) {
   return (
     <Link href={href} style={{ textDecoration:"none", display:"block" }}>
       <div className="card" style={{ cursor:"pointer", height:"100%", border: primary ? "1px solid var(--teal-20)" : "1px solid var(--bdr)", transition:"all 0.2s" }}
@@ -30,7 +32,7 @@ function ActionCard({ href, emoji, title, desc, primary }: { href: string; emoji
         onMouseLeave={e => { const el=e.currentTarget as HTMLDivElement; el.style.borderColor=primary?"var(--teal-20)":"var(--bdr)"; el.style.transform="none"; el.style.boxShadow="none"; }}
       >
         <div className="card-p" style={{ height:"100%" }}>
-          <div style={{ marginBottom:14 }}><span style={{ fontSize:26 }}>{emoji}</span></div>
+          <div style={{ marginBottom:14, color:"var(--teal)" }}>{icon}</div>
           <div style={{ fontFamily:"'Manrope',sans-serif", fontWeight:800, fontSize:15, color:"var(--tx)", marginBottom:6 }}>{title}</div>
           <div style={{ fontSize:13, color:"var(--tx2)", lineHeight:1.55, marginBottom:16 }}>{desc}</div>
           <div style={{ fontFamily:"'Manrope',sans-serif", fontSize:13, fontWeight:700, color:"var(--teal)", display:"flex", alignItems:"center", gap:5 }}>
@@ -79,7 +81,7 @@ export default function Dashboard() {
   const myAgentCount = allAgents ? (allAgents as string[]).length : null;
 
   return (
-    <div className="page-pad" style={{ maxWidth:1120, margin:"0 auto", padding:"32px 24px" }}>
+    <div className="page-pad">
 
       {/* Header */}
       <div style={{ marginBottom:26, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -101,7 +103,7 @@ export default function Dashboard() {
       {showGlobal && (
         <div style={{ marginBottom:20 }}>
           <div className="lbl" style={{ marginBottom:10 }}>PLATFORM STATS</div>
-          <div className="grid-stats" style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10 }}>
+          <div className="grid-stats">
             <StatCard label="Total Settled"  value={volume}  sub="All time"    loading={statsLoading} tip="Total USDC batch-settled through this contract." />
             <StatCard label="Fees Collected" value={fees}    sub="0.1% of vol" loading={statsLoading} tip="Accumulated platform fees at 0.1% per batch." />
             <StatCard label="Batches"        value={batches} sub="Settlements" loading={statsLoading} tip="Total batch settlement transactions executed." />
@@ -114,11 +116,11 @@ export default function Dashboard() {
       {/* Not connected */}
       {!isConnected ? (
         <div className="card" style={{ marginBottom:20 }}>
-          <EmptyState icon="🔌" title="Connect your wallet" desc="Connect a wallet to view your streams, batches, agents, and activity on Arc Testnet." />
+          <EmptyState icon={<IconPlug size={28} />} title="Connect your wallet" desc="Connect a wallet to view your streams, batches, agents, and activity on Arc Testnet." />
         </div>
       ) : (
         /* User summary — live from blockchain */
-        <div className="grid-user" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:20 }}>
+        <div className="grid-user" style={{ marginBottom:20 }}>
 
           {/* Address */}
           <div className="stat-card">
@@ -156,10 +158,10 @@ export default function Dashboard() {
       {/* Actions */}
       <div style={{ marginBottom:24 }}>
         <div className="lbl" style={{ marginBottom:12 }}>ACTIONS</div>
-        <div className="grid-1-mobile" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
-          <ActionCard href="/app/batch"   emoji="📋" title="Batch Settlement"  desc="Send USDC to up to 500 recipients in a single transaction. Import CSV or add manually." primary />
-          <ActionCard href="/app/streams" emoji="⚡" title="Payment Streams"   desc="Linear USDC vesting for payroll, contractor agreements, and token grants. Cancel anytime." />
-          <ActionCard href="/app/agents"  emoji="🤖" title="Agent Registry"    desc="Register AI wallets with USDC spending caps for fully autonomous onchain commerce." />
+        <div className="grid-1-mobile">
+          <ActionCard href="/app/batch"   icon={<IconBatch size={26} />}  title="Batch Settlement"  desc="Send USDC to up to 500 recipients in a single transaction. Import CSV or add manually." primary />
+          <ActionCard href="/app/streams" icon={<IconStream size={26} />} title="Payment Streams"   desc="Linear USDC vesting for payroll, contractor agreements, and token grants. Cancel anytime." />
+          <ActionCard href="/app/agents"  icon={<IconAgent size={26} />}  title="Agent Registry"    desc="Register AI wallets with USDC spending caps for fully autonomous onchain commerce." />
         </div>
       </div>
     </div>
