@@ -6,6 +6,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, shortAddress, explorerLink } from "../../../lib/arc";
 import { fetchAgentActivity, type AgentActivity } from "../../../lib/blockchain";
 import { Tooltip, ConfirmModal, EmptyState, Skeleton, TxBanner } from "../../../components/UI";
+import { IconAgent, IconVault, IconEmptyAgent, IconActivity } from "../../../components/icons";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 
@@ -41,7 +42,9 @@ function AgentCard({ addr, selected, onClick }: { addr: string; selected: boolea
     >
       <div className="card-p">
         <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:12 }}>
-          <div style={{ width:36, height:36, borderRadius:9, background:"var(--bg3)", border:"1px solid var(--bdr)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>🤖</div>
+          <div style={{ width:36, height:36, borderRadius:9, background:"var(--bg3)", border:"1px solid var(--bdr)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--tx3)", flexShrink:0 }}>
+            <IconAgent size={18} />
+          </div>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
               <div style={{ fontFamily:"'Manrope',sans-serif", fontWeight:800, fontSize:14, color:"var(--tx)", marginBottom:2 }}>
@@ -180,7 +183,7 @@ export default function AgentsPage() {
   const myActivity = activity.filter(a => !selectedAgent || a.agent.toLowerCase()===selectedAgent.toLowerCase());
 
   return (
-    <div style={{ maxWidth:1120, margin:"0 auto", padding:"32px 24px" }}>
+    <div className="page-pad">
       {rConfirm && <ConfirmModal title="Register Agent"
         message={<div><p style={{ marginBottom:12 }}>Register this AI agent wallet:</p><div style={{ background:"var(--bg3)", borderRadius:9, padding:"14px 16px", fontFamily:"'IBM Plex Mono',monospace", fontSize:12 }}><div style={{ marginBottom:5, wordBreak:"break-all" }}><span style={{ color:"var(--tx3)" }}>Address: </span>{rSnap.addr}</div><div style={{ marginBottom:5 }}><span style={{ color:"var(--tx3)" }}>Label: </span>{rSnap.label}</div><div><span style={{ color:"var(--tx3)" }}>Budget cap: </span><span style={{ color:"var(--teal)", fontWeight:700 }}>${parseFloat(rSnap.budget).toFixed(2)} USDC</span></div></div></div>}
         confirmLabel="Register Agent" onConfirm={doRegister} onCancel={()=>setRConfirm(false)} />}
@@ -213,13 +216,13 @@ export default function AgentsPage() {
       </div>
 
       {tab==="registry" ? (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+        <div className="form-grid-2">
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
 
             {/* Register */}
             <div className="card" style={{ opacity: !isOwner && authenticated ? 0.6 : 1 }}>
               <div className="card-hd">
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--teal-10)", border:"1px solid var(--teal-20)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>◎</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--tx)" }}>Register Agent</span></div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--teal-10)", border:"1px solid var(--teal-20)", display:"flex", alignItems:"center", justifyContent:"center" }}><IconAgent size={14} /></div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--tx)" }}>Register Agent</span></div>
                 <span className="chip chip-muted" style={{ fontSize:10 }}>Owner only</span>
               </div>
               <div className="card-p">
@@ -245,7 +248,7 @@ export default function AgentsPage() {
             {/* Fund */}
             <div className="card" style={{ opacity: !isOwner && authenticated ? 0.6 : 1 }}>
               <div className="card-hd">
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--green-10)", border:"1px solid var(--green-20)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>⬡</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"#10b981" }}>Fund Treasury</span></div>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--green-10)", border:"1px solid var(--green-20)", display:"flex", alignItems:"center", justifyContent:"center" }}><IconVault size={14} /></div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"#10b981" }}>Fund Treasury</span></div>
                 <span className="chip chip-muted" style={{ fontSize:10 }}>Owner only</span>
               </div>
               <div className="card-p">
@@ -276,7 +279,7 @@ export default function AgentsPage() {
             {agentsLoading ? (
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>{[1,2].map(i=><div key={i} className="card card-p"><Skeleton h={80} w="100%" /></div>)}</div>
             ) : !(allAgents as string[]) || (allAgents as string[]).length===0 ? (
-              <div className="card"><EmptyState icon="🤖" title="No agents registered" desc="Register your first AI agent wallet to enable autonomous USDC payments." /></div>
+              <div className="card"><EmptyState icon={<IconEmptyAgent size={28} />} title="No agents registered" desc="Register your first AI agent wallet to enable autonomous USDC payments." /></div>
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {(allAgents as string[]).map(addr=>(
@@ -307,7 +310,7 @@ export default function AgentsPage() {
             ) : actError ? (
               <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{actError}</div><button className="btn btn-ghost btn-sm" onClick={loadActivity}>Try again</button></div>
             ) : myActivity.length===0 ? (
-              <EmptyState icon="📡" title="No activity yet" desc="Agent registrations and payments appear here live from the blockchain." />
+              <EmptyState icon={<IconActivity size={28} />} title="No activity yet" desc="Agent registrations and payments appear here live from the blockchain." />
             ) : (
               <div style={{ overflowX:"auto" }}>
                 <table className="tbl">

@@ -397,3 +397,16 @@ a { text-decoration: none; }
   .page-pad   { padding: 14px 12px; }
   .grid-1-mobile { grid-template-columns: 1fr; }
 }
+
+/* Batch "Add manually" row — 3-column on desktop, stacks on mobile */
+.batch-add-row {
+  display: grid;
+  grid-template-columns: 1fr 150px auto;
+  gap: 10px;
+  align-items: flex-end;
+}
+@media (max-width: 600px) {
+  .batch-add-row {
+    grid-template-columns: 1fr;
+  }
+}

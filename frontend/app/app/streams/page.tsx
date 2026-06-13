@@ -6,6 +6,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, explorerLink } from "../../../lib/arc";
 import { fetchStreams, type StreamRecord } from "../../../lib/blockchain";
 import { Tooltip, ConfirmModal, EmptyState, TxBanner } from "../../../components/UI";
+import { IconStream, IconWithdraw, IconCancel, IconEmptyStream } from "../../../components/icons";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
 type StreamStatus = "active" | "finished" | "cancelled" | "withdrawn";
@@ -153,7 +154,6 @@ export default function StreamsPage() {
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName:"withdrawFromStream", args:[BigInt(wSnap)], gas:300_000n });
       setWTx(tx);
       setStreams(prev => prev.map(s => s.id.toString()===wSnap ? {...s, status:"withdrawn" as StreamStatus} : s));
-      setTimeout(loadStreams, 3000);
     } catch (e: unknown) { setWErr(((e as {shortMessage?:string}).shortMessage || "Failed").slice(0,140)); }
     finally { setWBusy(false); }
   };
@@ -170,7 +170,6 @@ export default function StreamsPage() {
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName:"cancelStream", args:[BigInt(cnSnap)], gas:300_000n });
       setCnTx(tx);
       setStreams(prev => prev.map(s => s.id.toString()===cnSnap ? {...s, status:"cancelled" as StreamStatus} : s));
-      setTimeout(loadStreams, 3000);
     } catch (e: unknown) { setCnErr(((e as {shortMessage?:string}).shortMessage || "Failed").slice(0,140)); }
     finally { setCnBusy(false); }
   };
@@ -180,7 +179,7 @@ export default function StreamsPage() {
   const activeCount  = streams.filter(s=>getDisplayStatus(s)==="active").length;
 
   return (
-    <div style={{ maxWidth:1120, margin:"0 auto", padding:"32px 24px" }}>
+    <div className="page-pad">
       {confirm   && <ConfirmModal title="Create Payment Stream" message={<div><p style={{marginBottom:12}}>Confirm stream:</p><div style={{background:"var(--bg3)",borderRadius:9,padding:"14px 16px",fontFamily:"'IBM Plex Mono',monospace",fontSize:12}}><div style={{marginBottom:5,wordBreak:"break-all"}}><span style={{color:"var(--tx3)"}}>To: </span>{snap.recip}</div><div style={{marginBottom:5}}><span style={{color:"var(--tx3)"}}>Amount: </span><span style={{color:"var(--teal)",fontWeight:700}}>${parseFloat(snap.amount).toFixed(2)} USDC</span></div><div style={{marginBottom:5}}><span style={{color:"var(--tx3)"}}>Start: </span>{snap.start}</div><div><span style={{color:"var(--tx3)"}}>End: </span>{snap.end}</div></div></div>} confirmLabel="Create Stream" onConfirm={doCreate} onCancel={()=>setConfirm(false)} />}
       {wConfirm  && <ConfirmModal title="Withdraw Vested USDC" message={<p>Claim all vested USDC from stream <strong>#{wSnap}</strong>.</p>} confirmLabel="Withdraw" onConfirm={doWithdraw} onCancel={()=>setWConfirm(false)} />}
       {cnConfirm && <ConfirmModal title="Cancel Stream" danger message={<p>Cancel stream <strong>#{cnSnap}</strong>. Vested → recipient. Unvested → you.</p>} confirmLabel="Cancel Stream" onConfirm={doCancel} onCancel={()=>setCnConfirm(false)} />}
@@ -199,14 +198,14 @@ export default function StreamsPage() {
       </div>
 
       {tab==="create" ? (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+        <div className="form-grid-2">
           <div className="card">
-            <div className="card-hd"><div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--teal-10)", border:"1px solid var(--teal-20)", display:"flex", alignItems:"center", justifyContent:"center" }}>⚡</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--tx)" }}>Create Stream</span></div></div>
+            <div className="card-hd"><div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--teal-10)", border:"1px solid var(--teal-20)", display:"flex", alignItems:"center", justifyContent:"center" }}><IconStream size={14} /></div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--tx)" }}>Create Stream</span></div></div>
             <div className="card-p">
               <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
                 <div><label className="lbl">Recipient Address</label><input className="inp" placeholder="0x..." onChange={e=>{recipVal.current=e.target.value;setCreateErr("");}} /></div>
                 <div><label className="lbl">Total USDC Amount</label><input className="inp" placeholder="1000.00" type="number" min="0" step="0.01" onChange={e=>{amountVal.current=e.target.value;setPreviewAmount(e.target.value);setCreateErr("");}} /></div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div className="form-grid-2">
                   <div><label className="lbl">Start Date</label><input className="inp" type="date" onChange={e=>{startVal.current=e.target.value;setPreviewStart(e.target.value);setCreateErr("");}} /></div>
                   <div><label className="lbl">End Date</label><input className="inp" type="date" onChange={e=>{endVal.current=e.target.value;setPreviewEnd(e.target.value);setCreateErr("");}} /></div>
                 </div>
@@ -222,7 +221,7 @@ export default function StreamsPage() {
 
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div className="card">
-              <div className="card-hd"><div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--green-10)", border:"1px solid var(--green-20)", display:"flex", alignItems:"center", justifyContent:"center" }}>↓</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"#10b981" }}>Withdraw Vested</span></div></div>
+              <div className="card-hd"><div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--green-10)", border:"1px solid var(--green-20)", display:"flex", alignItems:"center", justifyContent:"center" }}><IconWithdraw size={14} /></div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"#10b981" }}>Withdraw Vested</span></div></div>
               <div className="card-p">
                 <p style={{ fontSize:13, color:"var(--tx2)", marginBottom:12, lineHeight:1.55, fontWeight:500 }}>Enter your stream ID to claim vested USDC. Find IDs in the My Streams tab.</p>
                 <div style={{ display:"flex", gap:10, marginBottom:8 }}>
@@ -235,7 +234,7 @@ export default function StreamsPage() {
             </div>
 
             <div className="card">
-              <div className="card-hd"><div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--red-10)", border:"1px solid rgba(239,68,68,0.2)", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--red)" }}>Cancel Stream</span></div></div>
+              <div className="card-hd"><div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--red-10)", border:"1px solid rgba(239,68,68,0.2)", display:"flex", alignItems:"center", justifyContent:"center" }}><IconCancel size={14} /></div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--red)" }}>Cancel Stream</span></div></div>
               <div className="card-p">
                 <p style={{ fontSize:13, color:"var(--tx2)", marginBottom:12, lineHeight:1.55, fontWeight:500 }}>Recipient gets vested portion. You recover unvested USDC instantly.</p>
                 <div style={{ display:"flex", gap:10, marginBottom:8 }}>
@@ -274,7 +273,7 @@ export default function StreamsPage() {
           ) : loadError ? (
             <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{loadError}</div><button className="btn btn-ghost btn-sm" onClick={loadStreams}>Try again</button></div>
           ) : streams.length===0 ? (
-            <EmptyState icon="⚡" title="No streams yet" desc="Create your first stream. Data loads instantly from the blockchain." action={<button className="btn btn-primary btn-sm" onClick={()=>setTab("create")}>Create a stream</button>} />
+            <EmptyState icon={<IconEmptyStream size={28} />} title="No streams yet" desc="Create your first stream. Data loads instantly from the blockchain." action={<button className="btn btn-primary btn-sm" onClick={()=>setTab("create")}>Create a stream</button>} />
           ) : (
             <div style={{ overflowX:"auto" }}>
               <table className="tbl">
@@ -286,13 +285,25 @@ export default function StreamsPage() {
                       <tr key={i}>
                         <td><span className="chip chip-teal">#{h.id.toString()}</span></td>
                         <td><StatusBadge status={ds} /></td>
-                        <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}><a href={explorerLink("address",h.recipient)} target="_blank" rel="noopener noreferrer" style={{ color:"var(--teal)" }}>{h.recipient.slice(0,8)}…{h.recipient.slice(-6)}</a></td>
+                        <td>
+  <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+    <a href={explorerLink("address",h.recipient)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{h.recipient.slice(0,6)}…{h.recipient.slice(-4)}</a>
+    <button onClick={()=>navigator.clipboard.writeText(h.recipient)} title="Copy address" style={{ background:"none", border:"none", cursor:"pointer", color:"var(--tx3)", padding:2, display:"flex", lineHeight:1 }}>
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M3 11H2a1 1 0 01-1-1V2a1 1 0 011-1h8a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5"/></svg>
+    </button>
+  </div>
+</td>
                         <td style={{ fontFamily:"'Manrope',sans-serif", fontWeight:700, color:"var(--teal)" }}>${formatUSDC(h.amount)}</td>
                         <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.startTime)*1000).toLocaleDateString()}</td>
                         <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.endTime)*1000).toLocaleDateString()}</td>
                         <td>{h.txHash && <a href={explorerLink("tx",h.txHash)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{h.txHash.slice(0,8)}… ↗</a>}</td>
-                        <td><div style={{ display:"flex", gap:6 }}>
-                          {(ds==="active"||ds==="finished") && <button className="btn btn-ghost btn-sm" onClick={()=>fillWithdraw(h.id.toString())}>Withdraw</button>}
+                        <td><div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                          {(ds==="active"||ds==="finished") && (() => {
+                            const notStarted = Number(h.startTime)*1000 > Date.now();
+                            return notStarted
+                              ? <span style={{ fontSize:10, color:"var(--tx3)", fontWeight:600, fontFamily:"'IBM Plex Mono',monospace" }}>Not started</span>
+                              : <button className="btn btn-ghost btn-sm" onClick={()=>fillWithdraw(h.id.toString())}>Withdraw</button>;
+                          })()}
                           {ds==="active" && <button className="btn btn-danger btn-sm" onClick={()=>fillCancel(h.id.toString())}>Cancel</button>}
                         </div></td>
                       </tr>

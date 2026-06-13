@@ -9,6 +9,7 @@ import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, 
 import { fetchBatchHistory, type BatchRecord } from "../../../lib/blockchain";
 import { wagmiConfig } from "../../providers";
 import { Tooltip, ConfirmModal, EmptyState, TxBanner } from "../../../components/UI";
+import { IconDocument, IconEmptyList } from "../../../components/icons";
 
 interface Row { address: string; amount: string; valid: boolean; error?: string; }
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
@@ -138,7 +139,7 @@ export default function BatchPage() {
   };
 
   return (
-    <div style={{ maxWidth:1120, margin:"0 auto", padding:"32px 24px" }}>
+    <div className="page-pad">
       {confirm && (
         <ConfirmModal title="Confirm Batch Settlement"
           message={<div><p style={{ marginBottom:12 }}>You are about to settle:</p><div style={{ background:"var(--bg3)", borderRadius:9, padding:"14px 16px", fontFamily:"'IBM Plex Mono',monospace", fontSize:12 }}><div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}><span style={{ color:"var(--tx3)" }}>Recipients</span><span style={{ fontWeight:700 }}>{valid.length}</span></div><div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}><span style={{ color:"var(--tx3)" }}>Total USDC</span><span style={{ color:"#10b981", fontWeight:700 }}>${total.toFixed(2)}</span></div><div style={{ display:"flex", justifyContent:"space-between" }}><span style={{ color:"var(--tx3)" }}>Fee (0.1%)</span><span style={{ color:"var(--amber)" }}>${fee.toFixed(4)}</span></div></div><p style={{ marginTop:10, fontSize:12, color:"var(--tx3)" }}>Two signatures: approve USDC, then execute batch.</p></div>}
@@ -165,7 +166,7 @@ export default function BatchPage() {
       </div>
 
       {tab==="settle" ? (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 300px", gap:16 }}>
+        <div className="batch-grid">
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             <div className="card" style={{ borderStyle:"dashed", cursor:"pointer", borderColor:drag?"var(--teal)":"var(--bdr2)", background:drag?"var(--teal-10)":"var(--bg2)", transition:"all 0.2s" }}
               onClick={()=>fileRef.current?.click()}
@@ -174,7 +175,7 @@ export default function BatchPage() {
               onDrop={e=>{e.preventDefault();setDrag(false);const f=e.dataTransfer.files[0];if(f)parseCSV(f);}}>
               <input ref={fileRef} type="file" accept=".csv" style={{ display:"none" }} onChange={e=>e.target.files?.[0]&&parseCSV(e.target.files[0])} />
               <div style={{ padding:"24px", textAlign:"center" }}>
-                <div style={{ fontSize:28, marginBottom:8 }}>📄</div>
+                <div style={{ marginBottom:8, display:"flex", justifyContent:"center", color:"var(--tx3)" }}><IconDocument size={28} /></div>
                 <div style={{ fontFamily:"'Manrope',sans-serif", fontWeight:700, fontSize:14, color:"var(--tx)", marginBottom:4 }}>Drop a CSV or click to upload</div>
                 <div style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--tx3)" }}>Required columns: <span style={{ color:"var(--amber)" }}>address</span>, <span style={{ color:"var(--amber)" }}>amount</span></div>
               </div>
@@ -183,7 +184,7 @@ export default function BatchPage() {
             <div className="card">
               <div className="card-hd"><div className="lbl" style={{ marginBottom:0 }}>Add manually</div></div>
               <div className="card-p">
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 150px auto", gap:10, alignItems:"flex-end" }}>
+                <div className="batch-add-row">
                   <div><label className="lbl">Wallet address</label><input ref={addrDom} className="inp" placeholder="0x..." onChange={e=>{addrVal.current=e.target.value;setFormErr("");}} onKeyDown={e=>e.key==="Enter"&&addRow()} /></div>
                   <div><label className="lbl">USDC amount</label><input ref={amtDom} className="inp" placeholder="100.00" type="number" min="0" step="0.01" onChange={e=>{amtVal.current=e.target.value;setFormErr("");}} onKeyDown={e=>e.key==="Enter"&&addRow()} /></div>
                   <button className="btn btn-secondary" onClick={addRow} style={{ height:40 }}>+ Add</button>
@@ -261,7 +262,7 @@ export default function BatchPage() {
           ) : historyError ? (
             <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{historyError}</div><button className="btn btn-ghost btn-sm" onClick={loadHistory}>Try again</button></div>
           ) : history.length===0 ? (
-            <EmptyState icon="📋" title="No batch history yet" desc="Your settled batches appear here instantly from the blockchain." />
+            <EmptyState icon={<IconEmptyList size={28} />} title="No batch history yet" desc="Your settled batches appear here instantly from the blockchain." />
           ) : (
             <div style={{ overflowX:"auto" }}>
               <table className="tbl">

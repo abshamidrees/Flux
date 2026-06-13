@@ -234,11 +234,20 @@ export function Skeleton({ w = "100%", h = 20, br = 6 }: { w?: string | number; 
   return <div className="skel" style={{ width: w, height: h, borderRadius: br }} />;
 }
 
-/* ─── Empty state ────────────────────────────────────────── */
-export function EmptyState({ icon, title, desc, action }: { icon: string; title: string; desc: string; action?: ReactNode }) {
+// ── In components/UI.tsx, REPLACE the existing EmptyState function with this ──
+// New: `icon` now accepts a ReactNode (an <IconX /> element) instead of an emoji string.
+
+export function EmptyState({ icon, title, desc, action }: { icon: ReactNode; title: string; desc: string; action?: ReactNode }) {
   return (
     <div style={{ textAlign: "center", padding: "52px 24px" }}>
-      <div style={{ fontSize: 40, marginBottom: 14 }}>{icon}</div>
+      <div style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 56, height: 56, borderRadius: 14,
+        background: "var(--bg3)", border: "1px solid var(--bdr)",
+        color: "var(--tx3)", marginBottom: 16,
+      }}>
+        {icon}
+      </div>
       <div style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 16, color: "var(--tx)", marginBottom: 8 }}>{title}</div>
       <div style={{ fontSize: 14, color: "var(--tx3)", marginBottom: action ? 20 : 0, maxWidth: 340, margin: "0 auto", lineHeight: 1.6 }}>{desc}</div>
       {action && <div style={{ marginTop: 20 }}>{action}</div>}
