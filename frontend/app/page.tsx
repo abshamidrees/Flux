@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { FluxMark, Arrow } from "../components/UI";
+import { IconKey, IconDocument, IconBolt } from "../components/icons";
 import { GlobalLoadingScreen, triggerPageLoad } from "../components/LoadingScreen";
 
 /* ─── Counter ─────────────────────────────────────────── */
@@ -250,25 +251,22 @@ export default function Landing() {
           </div>
           <div className="how-grid" style={{ gap: 20 }}>
             {[
-              { n: "01", icon: "🔑", title: "Connect & approve", desc: "Add Arc testnet to MetaMask. Approve USDC once. Flux handles everything — no per-transaction approvals.", color: "#0f766e" },
-              { n: "02", icon: "📋", title: "Upload recipients",  desc: "Drag a CSV or add wallets manually. Flux validates every address and calculates totals including the 0.1% fee.", color: "#0f766e" },
-              { n: "03", icon: "⚡", title: "Settle in one tx",   desc: "One transaction. Sub-second Arc finality. USDC reaches every wallet simultaneously. Explorer link instant.", color: "#0f766e" },
+              { n: "01", Icon: IconKey,      title: "Connect & approve", desc: "Add Arc testnet to MetaMask. Approve USDC once. Flux handles everything — no per-transaction approvals.",                   color: "#0f766e" },
+              { n: "02", Icon: IconDocument, title: "Upload recipients",  desc: "Drag a CSV or add wallets manually. Flux validates every address and calculates totals including the 0.1% fee.",           color: "#0f766e" },
+              { n: "03", Icon: IconBolt,     title: "Settle in one tx",   desc: "One transaction. Sub-second Arc finality. USDC reaches every wallet simultaneously. Explorer link instant.", color: "#0f766e" },
             ].map(s => (
-              <div 
-                key={s.n} 
-                className="land-card" 
-                style={{ 
-                  position: "relative", 
-                  backgroundColor: "#CCF6EC", /* Changed card background here */
-                  padding: "24px",            /* Added standard padding just in case land-card styling needs a baseline layout */
-                  borderRadius: "12px"        /* Clean matching border radius */
-                }}
+              <div
+                key={s.n}
+                className="land-card"
+                style={{ position: "relative", backgroundColor: "#CCF6EC", padding: "24px", borderRadius: "12px" }}
               >
                 <div style={{ position: "absolute", top: 22, right: 22, width: 26, height: 26, borderRadius: "50%", background: `${s.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color }} />
                 </div>
                 <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: s.color, marginBottom: 18, opacity: 0.7 }}>{s.n}</div>
-                <div style={{ fontSize: 28, marginBottom: 14 }}>{s.icon}</div>
+                <div style={{ marginBottom: 14, color: s.color }}>
+                  <s.Icon size={28} />
+                </div>
                 <h3 style={{ fontFamily: "'Manrope',sans-serif", fontSize: 18, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.02em", marginBottom: 8 }}>{s.title}</h3>
                 <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.65 }}>{s.desc}</p>
               </div>

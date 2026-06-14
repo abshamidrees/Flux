@@ -206,3 +206,14 @@ export function IconBolt({ size = 20, ...p }: IconProps) {
     </svg>
   );
 }
+
+/* ── Key / connect wallet ── */
+export function IconKey({ size = 28, ...p }: IconProps) {
+  return (
+    <svg {...base(size)} strokeWidth={1.5} {...p}>
+      <circle cx="8.5" cy="8.5" r="5.5" />
+      <path d="M14.5 14.5L22 22" strokeLinecap="round" />
+      <path d="M18.5 18l-2 2" strokeLinecap="round" />
+    </svg>
+  );
+}
