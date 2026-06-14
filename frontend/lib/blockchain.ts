@@ -68,6 +68,7 @@ export interface StreamRecord {
   id: bigint; recipient: string; amount: bigint;
   startTime: bigint; endTime: bigint;
   txHash: string; status: "active" | "finished" | "cancelled" | "withdrawn";
+  sender?: string; // only populated by fetchReceivedStreams — the OTHER party (the creator)
 }
 
 // ── Batch history ─────────────────────────────────────────
@@ -176,4 +177,59 @@ export async function fetchAgentActivity(): Promise<AgentActivity[]> {
   }));
 
   return [...regItems, ...payItems];
+}
+
+// ── Received streams (where the user is RECIPIENT, not creator) ──────────
+// Used so a recipient can find and withdraw streams created FOR them.
+export async function fetchReceivedStreams(userAddress: string): Promise<StreamRecord[]> {
+  const paddedRecipient = padAddress(userAddress);
+
+  const [allCreated, allCancelled, allWithdrawn] = await Promise.all([
+    fetchLogs({ topic0: TOPIC.StreamCreated }),
+    fetchLogs({ topic0: TOPIC.StreamCancelled }),
+    fetchLogs({ topic0: TOPIC.StreamWithdrawn }),
+  ]);
+
+  // topics[3] = recipient (indexed) for StreamCreated
+  const received = allCreated.filter(l => l.topics[3]?.toLowerCase() === paddedRecipient.toLowerCase());
+
+  const receivedIds = new Set(received.map(l => BigInt(l.topics[1]).toString()));
+  const cancelledIds = new Set(
+    allCancelled.filter(l => receivedIds.has(BigInt(l.topics[1]).toString()))
+      .map(l => BigInt(l.topics[1]).toString())
+  );
+  const withdrawnIds = new Set(
+    allWithdrawn.filter(l => receivedIds.has(BigInt(l.topics[1]).toString()))
+      .map(l => BigInt(l.topics[1]).toString())
+  );
+
+  const order: Record<string, number> = { active: 0, finished: 1, withdrawn: 2, cancelled: 3 };
+  const now = Date.now();
+
+  const streams: StreamRecord[] = received.map(l => {
+    const id        = BigInt(l.topics[1]);
+    const sender    = "0x" + l.topics[2].slice(26);
+    const amount    = hex64(l.data, 0);
+    const startTime = hex64(l.data, 1);
+    const endTime   = hex64(l.data, 2);
+    const idStr     = id.toString();
+
+    let status: StreamRecord["status"] = "active";
+    if      (cancelledIds.has(idStr))  status = "cancelled";
+    else if (withdrawnIds.has(idStr))  status = "withdrawn";
+
+    return { id, recipient: userAddress, sender, amount, startTime, endTime, txHash: l.transactionHash, status };
+  });
+
+  const getDisplay = (s: StreamRecord) => {
+    if (s.status === "cancelled" || s.status === "withdrawn") return s.status;
+    if (Number(s.endTime) * 1000 < now) return "finished";
+    return "active";
+  };
+
+  return streams.sort((a, b) => {
+    const da = getDisplay(a), db = getDisplay(b);
+    if (da !== db) return order[da] - order[db];
+    return Number(b.id) - Number(a.id);
+  });
 }

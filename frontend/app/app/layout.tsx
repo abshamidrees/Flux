@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useAccount, useBalance } from "wagmi";
 import { useState, useEffect, useRef } from "react";
-import { USDC_ADDRESS, shortAddress, arcTestnet } from "../../lib/arc";
+import { USDC_ADDRESS, shortAddress } from "../../lib/arc";
 import { FluxMark, NetworkBanner } from "../../components/UI";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { NotificationBell } from "../../components/NotificationBell";
+import { IconSun, IconMoon } from "../../components/icons";
 
 const NAV = [
   { href: "/app",         label: "Dashboard" },
@@ -17,23 +18,17 @@ const NAV = [
   { href: "/app/agents",  label: "Agents"    },
 ];
 
-function SunIcon() {
-  return <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="2.4" stroke="currentColor" strokeWidth="1.4"/><path d="M7 1.5V3M7 11v1.5M12.5 7H11M3 7H1.5M10.7 3.3l-1.05 1.05M4.35 8.65l-1.05 1.05M10.7 10.7l-1.05-1.05M4.35 5.35 3.3 4.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>;
-}
-function MoonIcon() {
-  return <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12.5 9A6 6 0 0 1 5 1.5a6 6 0 1 0 7.5 7.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>;
-}
 function CopyIcon() {
   return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="4" y="4" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M1 9V2a1 1 0 0 1 1-1h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>;
 }
 
-/* ── Wallet dropdown — Rise style ──────────────────────── */
+/* ── Wallet dropdown ─────────────────────────────────────── */
 function WalletMenu({ address, balance, onDisconnect }: {
   address: string;
   balance: string | null;
   onDisconnect: () => void;
 }) {
-  const [open, setOpen]   = useState(false);
+  const [open, setOpen]     = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -79,7 +74,6 @@ function WalletMenu({ address, balance, onDisconnect }: {
           zIndex: 500, overflow: "hidden",
           animation: "slideUp 0.15s ease",
         }}>
-          {/* Address row */}
           <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--bdr)" }}>
             <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, color: "var(--tx)", marginBottom: 8, wordBreak: "break-all" }}>
               {address}
@@ -99,7 +93,6 @@ function WalletMenu({ address, balance, onDisconnect }: {
             </button>
           </div>
 
-          {/* Balance */}
           {balance && (
             <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--bdr)", display: "flex", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, color: "var(--tx3)", fontWeight: 500 }}>Balance</span>
@@ -107,7 +100,6 @@ function WalletMenu({ address, balance, onDisconnect }: {
             </div>
           )}
 
-          {/* Disconnect */}
           <button
             onClick={() => { setOpen(false); onDisconnect(); }}
             style={{
@@ -183,26 +175,17 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
 
         {/* Right */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Notification Bell */}
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <NotificationBell />
-          </div>
 
-          {/* Theme toggle */}
+          {/* Notification Bell — same .icon-btn style as theme toggle */}
+          <NotificationBell />
+
+          {/* Theme toggle — matches bell exactly */}
           <button
+            className="icon-btn"
             onClick={toggleTheme}
             title={theme === "dark" ? "Switch to light" : "Switch to dark"}
-            style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: "transparent", border: "1px solid var(--bdr)",
-              color: "var(--tx2)", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = "var(--teal)"; b.style.color = "var(--teal)"; }}
-            onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = "var(--bdr)"; b.style.color = "var(--tx2)"; }}
           >
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+            {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
           </button>
 
           {/* Wallet */}
@@ -215,11 +198,7 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
                   {displayBalance} <span style={{ color: "var(--tx3)" }}>USDC</span>
                 </span>
               )}
-              <WalletMenu
-                address={address}
-                balance={displayBalance}
-                onDisconnect={logout}
-              />
+              <WalletMenu address={address} balance={displayBalance} onDisconnect={logout} />
             </div>
           ) : (
             <button onClick={login} className="btn btn-primary btn-sm">

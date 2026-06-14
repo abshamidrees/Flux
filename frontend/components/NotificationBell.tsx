@@ -147,10 +147,7 @@ export function NotificationBell() {
   return (
     <div ref={ref} style={{ position:"relative" }}>
       {/* Bell button */}
-      <button onClick={handleOpen} style={{ position:"relative", width:36, height:36, borderRadius:9, background:"var(--bg3)", border:"1px solid var(--bdr)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", transition:"all 0.15s" }}
-        onMouseEnter={e=>(e.currentTarget.style.borderColor="var(--bdr2)")}
-        onMouseLeave={e=>(e.currentTarget.style.borderColor="var(--bdr)")}
-      >
+      <button onClick={handleOpen} className="icon-btn" style={{ position:"relative" }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--tx2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
         </svg>

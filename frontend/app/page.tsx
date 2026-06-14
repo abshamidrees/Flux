@@ -77,14 +77,16 @@ function Nav() {
           <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 19, color: "#0f172a", letterSpacing: "-0.03em" }}>Flux</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {[{ l: "Features", h: "#features" }, { l: "How it works", h: "#how-it-works" }, { l: "FAQ", h: "#faq" }].map(n => (
-            <a key={n.l} href={n.h} style={{ fontFamily: "'Manrope',sans-serif", fontSize: 14, fontWeight: 600, color: "#475569", padding: "8px 13px", borderRadius: 8, textDecoration: "none", transition: "color 0.15s" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "#0f172a"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "#475569"; }}>
-              {n.l}
-            </a>
-          ))}
-          <div style={{ width: 1, height: 18, background: "#e2e8f0", margin: "0 8px" }} />
+          <div className="nav-links-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {[{ l: "Features", h: "#features" }, { l: "How it works", h: "#how-it-works" }, { l: "FAQ", h: "#faq" }].map(n => (
+              <a key={n.l} href={n.h} style={{ fontFamily: "'Manrope',sans-serif", fontSize: 14, fontWeight: 600, color: "#475569", padding: "8px 13px", borderRadius: 8, textDecoration: "none", transition: "color 0.15s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "#0f172a"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "#475569"; }}>
+                {n.l}
+              </a>
+            ))}
+            <div style={{ width: 1, height: 18, background: "#e2e8f0", margin: "0 8px" }} />
+          </div>
           <AppLink style={{
             display: "inline-flex", alignItems: "center", gap: 8,
             fontFamily: "'Manrope',sans-serif", fontSize: 14, fontWeight: 700,
@@ -165,7 +167,7 @@ export default function Landing() {
       <Nav />
 
       {/* ══ HERO ══════════════════════════════════════════ */}
-      <section style={{
+      <section className="hero-section" style={{
         position: "relative", minHeight: "100vh",
         background: "linear-gradient(145deg, #c8f5e9 0%, #e8fdf5 25%, #f8fafc 55%, #ddeeff 80%, #d4e8ff 100%)",
         display: "flex", alignItems: "center", overflow: "hidden",
@@ -175,7 +177,7 @@ export default function Landing() {
         <div style={{ position: "absolute", bottom: "0%", left: "-10%", width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle, rgba(15,118,110,0.09) 0%, transparent 65%)", pointerEvents: "none" }} />
         <div style={{ position: "absolute", top: "30%", left: "40%", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(59,130,246,0.05) 0%, transparent 65%)", pointerEvents: "none" }} />
 
-        <div style={{ maxWidth: 1160, margin: "0 auto", padding: "130px 32px 90px", width: "100%", position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "1fr 370px", gap: 56, alignItems: "center" }}>
+        <div className="hero-grid" style={{ maxWidth: 1160, margin: "0 auto", padding: "130px 32px 90px", width: "100%", position: "relative", zIndex: 1, gap: 56, alignItems: "center" }}>
           <div>
             {/* Live badge */}
             <div className="fu0" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(15,118,110,0.12)", border: "1px solid rgba(15,118,110,0.28)", borderRadius: 100, padding: "7px 16px", marginBottom: 28 }}>
@@ -219,14 +221,14 @@ export default function Landing() {
             </div>
 
             {/* Stats strip */}
-            <div className="fu4" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", border: "1px solid rgba(15,118,110,0.2)", borderRadius: 12, overflow: "hidden", background: "rgba(255,255,255,0.7)", backdropFilter: "blur(8px)" }}>
+            <div className="fu4 hero-stats" style={{ border: "1px solid rgba(15,118,110,0.2)", borderRadius: 12, overflow: "hidden", background: "rgba(255,255,255,0.7)", backdropFilter: "blur(8px)" }}>
               {[
                 { v: <><Counter to={500} />+</>, l: "Recipients / tx" },
                 { v: "<1s",   l: "Finality" },
                 { v: "0.1%", l: "Platform fee" },
                 { v: "USDC", l: "Gas token" },
               ].map((s, i) => (
-                <div key={i} style={{ padding: "16px 20px", borderRight: i < 3 ? "1px solid rgba(15,118,110,0.12)" : "none" }}>
+                <div key={i} className="hero-stat-cell" style={{ padding: "16px 20px", borderRight: i < 3 ? "1px solid rgba(15,118,110,0.12)" : "none" }}>
                   <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", lineHeight: 1, marginBottom: 4 }}>{s.v}</div>
                   <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" }}>{s.l}</div>
                 </div>
@@ -235,18 +237,18 @@ export default function Landing() {
           </div>
 
           {/* Mock UI */}
-          <div className="float"><MockUI /></div>
+          <div className="float hero-mock"><MockUI /></div>
         </div>
       </section>
 
       {/* ══ HOW IT WORKS ══════════════════════════════════ */}
-      <section id="how-it-works" style={{ background: "#ffffff", padding: "96px 32px" }}>
+      <section id="how-it-works" className="land-section" style={{ background: "#ffffff", padding: "96px 32px" }}>
         <div style={{ maxWidth: 1160, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 56 }}>
             <div style={{ display: "inline-block", fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#0f766e", background: "rgba(15,118,110,0.08)", padding: "5px 14px", borderRadius: 100, marginBottom: 14 }}>How it works</div>
             <h2 style={{ fontFamily: "'Manrope',sans-serif", fontSize: "clamp(28px,4vw,44px)", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em" }}>Three steps to settlement</h2>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
+          <div className="how-grid" style={{ gap: 20 }}>
             {[
               { n: "01", icon: "🔑", title: "Connect & approve", desc: "Add Arc testnet to MetaMask. Approve USDC once. Flux handles everything — no per-transaction approvals.", color: "#0f766e" },
               { n: "02", icon: "📋", title: "Upload recipients",  desc: "Drag a CSV or add wallets manually. Flux validates every address and calculates totals including the 0.1% fee.", color: "#0f766e" },
@@ -276,8 +278,8 @@ export default function Landing() {
       </section>
 
       {/* ══ FEATURES ══════════════════════════════════════ */}
-      <section id="features" style={{ background: "#acc6e9", padding: "96px 32px" }}>
-        <div style={{ maxWidth: 1160, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center" }}>
+      <section id="features" className="land-section" style={{ background: "#acc6e9", padding: "96px 32px" }}>
+        <div className="features-grid" style={{ maxWidth: 1160, margin: "0 auto", gap: 60, alignItems: "center" }}>
           <div>
             <div style={{ display: "inline-block", fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#0f766e", background: "rgba(15,118,110,0.08)", padding: "5px 14px", borderRadius: 100, marginBottom: 16 }}>Features</div>
             <h2 style={{ fontFamily: "'Manrope',sans-serif", fontSize: "clamp(26px,4vw,42px)", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", lineHeight: 1.13, marginBottom: 16 }}>Built for the<br />agentic economy</h2>
@@ -324,7 +326,7 @@ export default function Landing() {
       </section>
 
       {/* ══ POWERED BY ════════════════════════════════════ */}
-      <section style={{ background: "#fff", padding: "56px 32px", borderTop: "1px solid #e2e8f0", borderBottom: "1px solid #e2e8f0" }}>
+      <section className="land-section" style={{ background: "#fff", padding: "56px 32px", borderTop: "1px solid #e2e8f0", borderBottom: "1px solid #e2e8f0" }}>
         <div style={{ maxWidth: 1160, margin: "0 auto", textAlign: "center" }}>
           <p style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, color: "#94a3b8", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 28 }}>Powered by</p>
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 48, flexWrap: "wrap" }}>
@@ -339,7 +341,7 @@ export default function Landing() {
       </section>
 
       {/* ══ FAQ ═══════════════════════════════════════════ */}
-      <section id="faq" style={{ background: "#f8fafc", padding: "96px 32px" }}>
+      <section id="faq" className="land-section" style={{ background: "#f8fafc", padding: "96px 32px" }}>
         <div style={{ maxWidth: 760, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 52 }}>
             <div style={{ display: "inline-block", fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#0f766e", background: "rgba(15,118,110,0.08)", padding: "5px 14px", borderRadius: 100, marginBottom: 14 }}>FAQ</div>
@@ -353,7 +355,7 @@ export default function Landing() {
       </section>
 
       {/* ══ BOTTOM CTA — strong gradient as requested ═════ */}
-      <section style={{
+      <section className="land-section" style={{
         padding: "100px 32px", textAlign: "center",
         background: "linear-gradient(145deg, #0f766e 0%, #0a5f59 35%, #0d4a6e 70%, #0a3d5c 100%)",
         position: "relative", overflow: "hidden",
@@ -385,7 +387,7 @@ export default function Landing() {
       {/* ══ FOOTER ════════════════════════════════════════ */}
       <footer style={{ background: "#0f172a", padding: "64px 32px 32px" }}>
         <div style={{ maxWidth: 1160, margin: "0 auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "260px 1fr 1fr 1fr", gap: 48, marginBottom: 48 }}>
+          <div className="footer-grid" style={{ gap: 48, marginBottom: 48 }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                 <FluxMark size={30} />

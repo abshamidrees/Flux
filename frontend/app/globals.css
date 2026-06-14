@@ -410,3 +410,36 @@ a { text-decoration: none; }
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Landing page grids ──────────────────────────────────────────────── */
+.hero-grid     { display: grid; grid-template-columns: 1fr 370px; }
+.hero-stats    { display: grid; grid-template-columns: repeat(4, 1fr); }
+.how-grid      { display: grid; grid-template-columns: repeat(3, 1fr); }
+.features-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.footer-grid   { display: grid; grid-template-columns: 260px 1fr 1fr 1fr; }
+
+@media (max-width: 900px) {
+  .hero-grid     { grid-template-columns: 1fr; gap: 40px; }
+  .hero-mock     { order: -1; max-width: 440px; margin: 0 auto; width: 100%; }
+  .features-grid { grid-template-columns: 1fr; gap: 36px; }
+  .footer-grid   { grid-template-columns: 1fr; gap: 36px; }
+  .nav-links-sm  { display: none; }
+}
+
+@media (max-width: 768px) {
+  .how-grid      { grid-template-columns: 1fr; }
+  .hero-stats    { grid-template-columns: repeat(2, 1fr); }
+  .hero-stat-cell:nth-child(2) { border-right: none !important; }
+  .hero-grid     { padding: 100px 18px 56px !important; }
+  .land-section  { padding: 56px 18px !important; }
+}
+
+/* ── Shared icon-button style (theme toggle + notification bell) ───────── */
+.icon-btn {
+  width: 36px; height: 36px; border-radius: 9px;
+  background: var(--bg3); border: 1px solid var(--bdr);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s; color: var(--tx2);
+  flex-shrink: 0;
+}
+.icon-btn:hover { border-color: var(--bdr2); color: var(--tx); }

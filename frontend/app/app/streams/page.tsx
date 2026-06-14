@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent } from "wagmi";
 import { usePrivy } from "@privy-io/react-auth";
 import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, explorerLink } from "../../../lib/arc";
-import { fetchStreams, type StreamRecord } from "../../../lib/blockchain";
+import { fetchStreams, fetchReceivedStreams, type StreamRecord } from "../../../lib/blockchain";
 import { Tooltip, ConfirmModal, EmptyState, TxBanner } from "../../../components/UI";
 import { IconStream, IconWithdraw, IconCancel, IconEmptyStream } from "../../../components/icons";
 
@@ -58,10 +58,14 @@ export default function StreamsPage() {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
 
-  const [tab, setTab]               = useState<"create"|"history">("create");
+  const [tab, setTab]               = useState<"create"|"history"|"received">("create");
   const [streams, setStreams]        = useState<StreamRecord[]>([]);
   const [loading, setLoading]        = useState(false);
   const [loadError, setLoadError]    = useState("");
+
+  const [received, setReceived]             = useState<StreamRecord[]>([]);
+  const [receivedLoading, setReceivedLoading] = useState(false);
+  const [receivedError, setReceivedError]     = useState("");
 
   // Create form
   const recipVal = useRef(""); const amountVal = useRef("");
@@ -105,6 +109,21 @@ export default function StreamsPage() {
   }, [address]);
 
   useEffect(() => { loadStreams(); }, [loadStreams]);
+
+  // ── Fetch streams where I am the RECIPIENT ────────────────
+  const loadReceived = useCallback(async () => {
+    if (!address || !FLUX_ADDRESS) return;
+    setReceivedLoading(true); setReceivedError("");
+    try {
+      const data = await fetchReceivedStreams(address);
+      setReceived(data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setReceivedError(`Could not load received streams: ${msg.slice(0, 100)}`);
+    } finally { setReceivedLoading(false); }
+  }, [address]);
+
+  useEffect(() => { loadReceived(); }, [loadReceived]);
 
   useWatchContractEvent({
     address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "StreamCreated",
@@ -154,6 +173,7 @@ export default function StreamsPage() {
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName:"withdrawFromStream", args:[BigInt(wSnap)], gas:300_000n });
       setWTx(tx);
       setStreams(prev => prev.map(s => s.id.toString()===wSnap ? {...s, status:"withdrawn" as StreamStatus} : s));
+      setReceived(prev => prev.map(s => s.id.toString()===wSnap ? {...s, status:"withdrawn" as StreamStatus} : s));
     } catch (e: unknown) { setWErr(((e as {shortMessage?:string}).shortMessage || "Failed").slice(0,140)); }
     finally { setWBusy(false); }
   };
@@ -189,11 +209,15 @@ export default function StreamsPage() {
         <p style={{ fontSize:13, color:"var(--tx3)", fontWeight:500 }}>Linear USDC vesting for payroll, grants, and contractor agreements.</p>
       </div>
 
-      <div className="tabs" style={{ maxWidth:280, marginBottom:22 }}>
+      <div className="tabs" style={{ maxWidth:420, marginBottom:22 }}>
         <button className={`tab ${tab==="create"?"active":""}`} onClick={()=>setTab("create")}>Create</button>
         <button className={`tab ${tab==="history"?"active":""}`} onClick={()=>setTab("history")} style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
           <span>My Streams</span>
           {streams.length>0 && <span style={{ background:"var(--teal)", color:"var(--bg)", fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999, fontFamily:"'IBM Plex Mono',monospace", flexShrink:0, lineHeight:"18px" }}>{streams.length}</span>}
+        </button>
+        <button className={`tab ${tab==="received"?"active":""}`} onClick={()=>setTab("received")} style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <span>Received</span>
+          {received.length>0 && <span style={{ background:"var(--teal)", color:"var(--bg)", fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999, fontFamily:"'IBM Plex Mono',monospace", flexShrink:0, lineHeight:"18px" }}>{received.length}</span>}
         </button>
       </div>
 
@@ -256,7 +280,7 @@ export default function StreamsPage() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : tab==="history" ? (
         <div className="card" style={{ overflow:"hidden" }}>
           <div className="card-hd">
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -298,14 +322,70 @@ export default function StreamsPage() {
                         <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.endTime)*1000).toLocaleDateString()}</td>
                         <td>{h.txHash && <a href={explorerLink("tx",h.txHash)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{h.txHash.slice(0,8)}… ↗</a>}</td>
                         <td><div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                          {(ds==="active"||ds==="finished") && (() => {
+                          {(ds==="active"||ds==="finished") && address?.toLowerCase()===h.recipient.toLowerCase() && (() => {
                             const notStarted = Number(h.startTime)*1000 > Date.now();
                             return notStarted
                               ? <span style={{ fontSize:10, color:"var(--tx3)", fontWeight:600, fontFamily:"'IBM Plex Mono',monospace" }}>Not started</span>
                               : <button className="btn btn-ghost btn-sm" onClick={()=>fillWithdraw(h.id.toString())}>Withdraw</button>;
                           })()}
                           {ds==="active" && <button className="btn btn-danger btn-sm" onClick={()=>fillCancel(h.id.toString())}>Cancel</button>}
+                          {ds!=="active" && ds!=="finished" && address?.toLowerCase()!==h.recipient.toLowerCase() && <span style={{ fontSize:11, color:"var(--tx3)" }}>—</span>}
                         </div></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="card" style={{ overflow:"hidden" }}>
+          <div className="card-hd">
+            <div className="lbl" style={{ marginBottom:0 }}>Received Streams</div>
+            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+              <span style={{ fontSize:12, color:"var(--tx3)", fontWeight:500 }}>Live from blockchain</span>
+              <button className="btn btn-ghost btn-sm" onClick={loadReceived} disabled={receivedLoading} style={{ fontSize:11, padding:"2px 8px" }}>{receivedLoading?"Loading…":"↻ Refresh"}</button>
+            </div>
+          </div>
+          {receivedLoading ? (
+            <div style={{ padding:"40px 24px", textAlign:"center", color:"var(--tx3)", fontSize:14 }}>Loading received streams…</div>
+          ) : receivedError ? (
+            <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{receivedError}</div><button className="btn btn-ghost btn-sm" onClick={loadReceived}>Try again</button></div>
+          ) : received.length===0 ? (
+            <EmptyState icon={<IconEmptyStream size={28} />} title="No streams received" desc="Streams other people create for you appear here, with a Withdraw button as soon as they start." />
+          ) : (
+            <div style={{ overflowX:"auto" }}>
+              <table className="tbl">
+                <thead><tr><th>ID</th><th>Status</th><th>From</th><th>Amount</th><th>Start</th><th>End</th><th>Tx</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {received.map((h,i)=>{
+                    const ds=getDisplayStatus(h);
+                    const notStarted = Number(h.startTime)*1000 > Date.now();
+                    return (
+                      <tr key={i}>
+                        <td><span className="chip chip-teal">#{h.id.toString()}</span></td>
+                        <td><StatusBadge status={ds} /></td>
+                        <td>
+  <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+    <a href={explorerLink("address",h.sender||"")} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{(h.sender||"").slice(0,6)}…{(h.sender||"").slice(-4)}</a>
+    <button onClick={()=>navigator.clipboard.writeText(h.sender||"")} title="Copy address" style={{ background:"none", border:"none", cursor:"pointer", color:"var(--tx3)", padding:2, display:"flex", lineHeight:1 }}>
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M3 11H2a1 1 0 01-1-1V2a1 1 0 011-1h8a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5"/></svg>
+    </button>
+  </div>
+</td>
+                        <td style={{ fontFamily:"'Manrope',sans-serif", fontWeight:700, color:"var(--teal)" }}>${formatUSDC(h.amount)}</td>
+                        <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.startTime)*1000).toLocaleDateString()}</td>
+                        <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.endTime)*1000).toLocaleDateString()}</td>
+                        <td>{h.txHash && <a href={explorerLink("tx",h.txHash)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{h.txHash.slice(0,8)}… ↗</a>}</td>
+                        <td>
+                          {(ds==="active"||ds==="finished") && (
+                            notStarted
+                              ? <span style={{ fontSize:10, color:"var(--tx3)", fontWeight:600, fontFamily:"'IBM Plex Mono',monospace" }}>Not started</span>
+                              : <button className="btn btn-ghost btn-sm" onClick={()=>fillWithdraw(h.id.toString())}>Withdraw</button>
+                          )}
+                          {(ds==="cancelled"||ds==="withdrawn") && <span style={{ fontSize:11, color:"var(--tx3)" }}>—</span>}
+                        </td>
                       </tr>
                     );
                   })}
