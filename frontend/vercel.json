@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/keeper/limit-orders",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
