@@ -1,33 +1,47 @@
-import React from "react";
-function H1({ c }: { c: React.ReactNode }) { return <h1 style={{ fontFamily:"'Manrope',sans-serif", fontSize:28, fontWeight:800, color:"var(--tx)", letterSpacing:"-0.03em", marginBottom:10, marginTop:0 }}>{c}</h1>; }
-function H2({ c }: { c: React.ReactNode }) { return <h2 style={{ fontFamily:"'Manrope',sans-serif", fontSize:18, fontWeight:800, color:"var(--tx)", marginTop:36, marginBottom:8 }}>{c}</h2>; }
-function P({ c }: { c: React.ReactNode }) { return <p style={{ fontSize:14, color:"var(--tx2)", lineHeight:1.75, fontWeight:500, marginBottom:14 }}>{c}</p>; }
-function Pre({ c }: { c: string }) { return <pre style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:12, background:"var(--bg2)", border:"1px solid var(--bdr)", borderRadius:10, padding:"16px 18px", color:"var(--tx2)", lineHeight:1.65, overflowX:"auto", marginBottom:18 }}>{c}</pre>; }
+"use client";
+
+import { H1, H2, P, CodeBlock, AddressLink } from "../../../components/docs/DocsUI";
+import { Breadcrumbs } from "../../../components/docs/Breadcrumbs";
+import { FLUX_ADDRESS } from "../../../lib/arc";
 
 export default function DocsAgentsPage() {
   return (
     <div>
-      <H1 c="Agent Registry" />
-      <P c="Register AI agent wallets with USDC spending caps. Agents can then call agentPay() autonomously to send USDC to any recipient — without requiring manual approval for each payment — as long as they stay within their cap." />
+      <Breadcrumbs trail={[{ label: "Docs", href: "/docs" }, { label: "Agent Registry" }]} />
+      <H1 id="agent-registry">Agent Registry</H1>
+      <P>Register AI agent wallets with USDC spending caps. Once registered, an agent calls <code>agentPay()</code> from its own wallet to send USDC autonomously — no manual approval per payment — as long as it stays within its cap.</P>
 
-      <H2 c="Use cases" />
-      <P c="AI trading bots that pay fees autonomously. Subscription services billed by an agent. Autonomous payroll agents. DeFi bots that need to pay gas or services. Any AI system that needs onchain payment authority without human-in-the-loop." />
+      <H2 id="use-cases">Use cases</H2>
+      <P>AI trading bots that pay fees autonomously. Subscription services billed by an agent. Autonomous payroll agents. DeFi bots that need to pay for gas or services. Any AI system that needs on-chain payment authority without a human in the loop.</P>
 
-      <H2 c="How it works" />
-      <P c="1. Owner registers the agent wallet address with a label and USDC budget cap. 2. Owner deposits USDC into the contract treasury. 3. The agent calls agentPay(recipient, amount) from its own wallet. 4. Contract checks: is this wallet registered? Is amount within cap? If yes, payment executes. If no, it reverts." />
+      <H2 id="how-it-works">How it works</H2>
+      <P>The owner registers the agent wallet with a label and USDC budget cap, then deposits USDC into the contract treasury. The agent calls <code>agentPay(recipient, amount)</code> from its own wallet; the contract checks the agent is active and within its cumulative cap before releasing funds.</P>
 
-      <H2 c="Owner-only actions" />
-      <P c="Register Agent and Fund Treasury require the contract deployer wallet. This is a security design — only the contract owner can whitelist agents and fund the treasury. Regular users can view registered agents but cannot modify them." />
+      <H2 id="owner-only-actions">Owner-only actions</H2>
+      <P>Register Agent and Fund Treasury require the contract deployer wallet — only the owner can whitelist agents or fund the treasury. Regular users can view registered agents but cannot modify them.</P>
 
-      <H2 c="agentPay interface" />
-      <Pre c={`// Called by the agent wallet, not the owner
-function agentPay(address recipient, uint256 amount) external {
-    require(agents[msg.sender] >= amount, "Flux: over cap");
-    // transfers amount from treasury to recipient
-}`} />
+      <H2 id="agentpay-interface">agentPay interface</H2>
+      <CodeBlock label="FluxSettlement.sol">{`modifier onlyActiveAgent() {
+    require(agents[msg.sender].active, "Flux: agent not registered");
+    _;
+}
 
-      <H2 c="Budget cap" />
-      <P c="The budget cap is cumulative — once an agent has spent its full cap, it cannot make further payments. The owner must register a new agent or deploy a new contract to increase the cap. This is intentional: it limits blast radius if an agent is compromised." />
+// Called by the agent's own wallet, not the owner.
+function agentPay(address recipient, uint256 amount) external onlyActiveAgent {
+    Agent storage a = agents[msg.sender];
+    require(a.spent + amount <= a.budgetCap, "Flux: budget exceeded");
+    require(recipient != address(0), "Flux: zero recipient");
+
+    a.spent += amount;
+    // transfers amount from the contract's treasury to recipient
+}`}</CodeBlock>
+
+      <H2 id="budget-cap">Budget cap</H2>
+      <P>The budget cap is cumulative — once an agent has spent its full cap, it cannot make further payments. The owner must register a new agent or raise the cap via <code>updateAgent()</code>. This is intentional: it limits blast radius if an agent is compromised.</P>
+
+      <H2 id="contract">Contract</H2>
+      <P>Agents are handled by <code>FluxSettlement.registerAgent()</code>, <code>updateAgent()</code>, and <code>agentPay()</code>. Full ABI and events are in the <a href="/docs/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page.</P>
+      <P><AddressLink address={FLUX_ADDRESS || "0x0BBBc1C77ada4d584445383B77b88DDdDAae2F6A"} label="FluxSettlement on ArcScan" /></P>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useAccount, useReadContract } from "wagmi";
 import { useState, useEffect } from "react";
 import { FLUX_ABI, FLUX_ADDRESS, formatUSDC, explorerLink } from "../../lib/arc";
-import { fetchStreams, fetchBatchHistory } from "../../lib/blockchain";
+import { fetchStreams, fetchBatchHistory, fetchTotalStreamedVolume } from "../../lib/blockchain";
 import { Skeleton, Tooltip, EmptyState } from "../../components/UI";
 import { IconBatch, IconStream, IconAgent, IconPlug } from "../../components/icons";
 import { ReactNode } from "react";
@@ -68,7 +68,6 @@ export default function Dashboard() {
     query: { enabled: !!FLUX_ADDRESS },
   });
   const volume  = stats ? `$${formatUSDC(stats[0])}` : "$0.00";
-  const fees    = stats ? `$${formatUSDC(stats[1])}` : "$0.00";
   const batches = stats ? stats[2].toString() : "0";
   const streams = stats ? stats[3].toString() : "0";
   const agents  = stats ? stats[4].toString() : "0";
@@ -79,6 +78,19 @@ export default function Dashboard() {
     query: { enabled: !!FLUX_ADDRESS && isConnected },
   });
   const myAgentCount = allAgents ? (allAgents as string[]).length : null;
+
+  // Total streamed — protocol-wide, direct from Flux's own StreamCreated
+  // events (unfiltered, every stream any address has ever created).
+  const [totalStreamed, setTotalStreamed] = useState<bigint | null>(null);
+  const [streamedLoading, setStreamedLoading] = useState(false);
+  useEffect(() => {
+    if (!FLUX_ADDRESS) return;
+    setStreamedLoading(true);
+    fetchTotalStreamedVolume()
+      .then(setTotalStreamed)
+      .catch(() => setTotalStreamed(0n))
+      .finally(() => setStreamedLoading(false));
+  }, []);
 
   return (
     <div className="page-pad">
@@ -105,7 +117,13 @@ export default function Dashboard() {
           <div className="lbl" style={{ marginBottom:10 }}>PLATFORM STATS</div>
           <div className="grid-stats">
             <StatCard label="Total Settled"  value={volume}  sub="All time"    loading={statsLoading} tip="Total USDC batch-settled through this contract." />
-            <StatCard label="Fees Collected" value={fees}    sub="0.1% of vol" loading={statsLoading} tip="Accumulated platform fees at 0.1% per batch." />
+            <StatCard
+              label="Total Streamed"
+              value={totalStreamed != null ? `$${formatUSDC(totalStreamed)}` : "$0.00"}
+              sub="All time"
+              loading={streamedLoading}
+              tip="Total USDC committed across every payment stream ever created on this contract."
+            />
             <StatCard label="Batches"        value={batches} sub="Settlements" loading={statsLoading} tip="Total batch settlement transactions executed." />
             <StatCard label="Streams"        value={streams} sub="Created"     loading={statsLoading} tip="Total payment streams created on this contract." />
             <StatCard label="Agents"         value={agents}  sub="Registered"  loading={statsLoading} tip="AI agent wallets registered with spending caps." />

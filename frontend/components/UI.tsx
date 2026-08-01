@@ -1,7 +1,8 @@
 "use client";
 
 import { ReactNode, useState, useRef, useEffect } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useSwitchChain } from "wagmi";
+import { usePrivy } from "@privy-io/react-auth";
 import { arcTestnet } from "../lib/arc";
 
 /* ─── Logo ──────────────────────────────────────────────── */
@@ -149,52 +150,34 @@ export function ConfirmModal({ title, message, confirmLabel = "Confirm", danger,
   );
 }
 
-/* ─── Network banner — fix: uses wallet_addEthereumChain ── */
+/* ─── Network banner ────────────────────────────────────── */
 export function NetworkBanner() {
-  const { chainId, isConnected } = useAccount();
-  const [switching, setSwitching] = useState(false);
+  // Phase G fix: wagmi's own isConnected reflects the connector's raw state,
+  // which can be true from a remembered prior site authorization (MetaMask
+  // etc.) even when the app itself is showing "Connect Wallet" — reconnectOnMount
+  // lets an injected connector silently reconnect without the user ever
+  // completing Privy's login. Gate on the SAME signal the header actually uses
+  // (Privy's authenticated + address) so the banner never shows to someone the
+  // rest of the UI is treating as disconnected.
+  const { authenticated } = usePrivy();
+  const { address, chainId } = useAccount();
+  const { switchChainAsync, isPending: switching } = useSwitchChain();
   const [error, setError] = useState("");
 
-  if (!isConnected || chainId === arcTestnet.id) return null;
+  if (!authenticated || !address || chainId === arcTestnet.id) return null;
 
   const switchToArc = async () => {
-    setSwitching(true);
     setError("");
     try {
-      const provider = (window as unknown as { ethereum?: unknown }).ethereum;
-      if (!provider) { setError("MetaMask not detected"); setSwitching(false); return; }
-
-      // Try switching first
-      try {
-        await (provider as { request: (args: { method: string; params: unknown[] }) => Promise<void> }).request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0x4CBFF2" }], // 5042002 in hex
-        });
-      } catch (switchErr: unknown) {
-        const err = switchErr as { code?: number };
-        // 4902 = chain not added — add it
-        if (err.code === 4902 || err.code === -32603) {
-          await (provider as { request: (args: { method: string; params: unknown[] }) => Promise<void> }).request({
-            method: "wallet_addEthereumChain",
-            params: [{
-              chainId: "0x4CBFF2",
-              chainName: "Arc Testnet",
-              nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 6 },
-              rpcUrls: ["https://rpc.testnet.arc.network"],
-              blockExplorerUrls: ["https://testnet.arcscan.app"],
-            }],
-          });
-        } else {
-          throw switchErr;
-        }
-      }
+      // Routes through whichever connector is actually active (Privy embedded,
+      // injected, WalletConnect) — not a raw window.ethereum call, which
+      // silently does nothing when that global isn't the wallet actually in
+      // use. Handles the "chain not added yet" case internally.
+      await switchChainAsync({ chainId: arcTestnet.id });
     } catch (e: unknown) {
-      const err = e as { message?: string; code?: number };
-      if (err.code !== 4001) { // 4001 = user rejected
-        setError(err.message?.slice(0, 60) || "Switch failed");
-      }
-    } finally {
-      setSwitching(false);
+      const err = e as { message?: string; code?: number; name?: string };
+      const rejected = err.code === 4001 || err.name === "UserRejectedRequestError" || (err.message ?? "").toLowerCase().includes("rejected");
+      if (!rejected) setError(err.message?.slice(0, 60) || "Switch failed");
     }
   };
 

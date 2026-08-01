@@ -71,6 +71,17 @@ export interface StreamRecord {
   sender?: string; // only populated by fetchReceivedStreams — the OTHER party (the creator)
 }
 
+// ── Protocol-wide totals ────────────────────────────────────
+// Unfiltered (no sender/recipient match) — every StreamCreated log ever
+// emitted, summed. Real, on-chain, and genuinely protocol-wide: streams are
+// created directly on Flux's own contract, unlike swaps (which execute
+// against third-party routers Flux doesn't own, so a true protocol-wide swap
+// total isn't computable from on-chain data alone).
+export async function fetchTotalStreamedVolume(): Promise<bigint> {
+  const logs = await fetchLogs({ topic0: TOPIC.StreamCreated });
+  return logs.reduce((sum, l) => sum + hex64(l.data, 0), 0n);
+}
+
 // ── Batch history ─────────────────────────────────────────
 // BatchSettled: topic0=hash, topic1=sender (indexed) → use topic0_1_opr=and
 export async function fetchBatchHistory(userAddress: string): Promise<BatchRecord[]> {

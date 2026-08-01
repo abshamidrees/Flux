@@ -1,5 +1,9 @@
 import { defineChain } from "viem";
 
+// Optional override so a better (e.g. Circle-issued, API-keyed) Arc Testnet RPC
+// can be dropped in via env with no code change. Falls back to the public one.
+export const ARC_RPC_URL = process.env.NEXT_PUBLIC_ARC_RPC_URL || "https://rpc.testnet.arc.network";
+
 // ── Arc Testnet chain definition ──────────────────────────
 export const arcTestnet = defineChain({
   id: 5042002,
@@ -10,12 +14,24 @@ export const arcTestnet = defineChain({
     symbol: "USDC",
   },
   rpcUrls: {
-    default: { http: ["https://rpc.testnet.arc.network"] },
+    default: { http: [ARC_RPC_URL] },
   },
   blockExplorers: {
     default: {
       name: "ArcScan",
       url: "https://testnet.arcscan.app",
+    },
+  },
+  // Verified deployed on Arc Testnet (eth_getCode returns real bytecode at the
+  // canonical address). Without this, wagmi's useReadContracts / useReadContract
+  // silently falls back to one eth_call PER contract instead of batching them
+  // into a single multicall — on a rate-limited public RPC that's the direct
+  // cause of balances intermittently showing $0 (a rate-limited individual call
+  // fails silently to the allowFailure fallback instead of erroring visibly).
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11",
+      blockCreated: 0,
     },
   },
   testnet: true,
@@ -24,6 +40,8 @@ export const arcTestnet = defineChain({
 // ── Contract addresses ────────────────────────────────────
 export const FLUX_ADDRESS = (process.env.NEXT_PUBLIC_FLUX_ADDRESS || "") as `0x${string}`;
 export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS || "") as `0x${string}`;
+// Empty until scripts/deployLimitOrder.ts has been run — swap UI treats this as "not live yet".
+export const FLUX_LIMIT_ORDER_ADDRESS = (process.env.NEXT_PUBLIC_FLUX_LIMIT_ORDER_ADDRESS || "") as `0x${string}`;
 // Approximate contract deployment block on Arc Testnet (used as fromBlock for getLogs)
 // Set to ~May 14 2026. If events are missing, lower this value.
 export const FLUX_DEPLOY_BLOCK = 42_100_000n;
@@ -285,6 +303,105 @@ export const FLUX_ABI = [
       { name: "agent", type: "address", indexed: true },
       { name: "label", type: "string", indexed: false },
       { name: "budgetCap", type: "uint256", indexed: false },
+    ],
+  },
+] as const;
+
+// ── FluxLimitOrder ABI (minimal) ───────────────────────────
+export const FLUX_LIMIT_ORDER_ABI = [
+  {
+    name: "createOrder",
+    type: "function",
+    inputs: [
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "amountIn", type: "uint256" },
+      { name: "minAmountOut", type: "uint256" },
+      { name: "expiry", type: "uint64" },
+    ],
+    outputs: [{ name: "orderId", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    name: "cancelOrder",
+    type: "function",
+    inputs: [{ name: "orderId", type: "uint256" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  // Keeper-only — not called from the browser UI.
+  {
+    name: "executeOrder",
+    type: "function",
+    inputs: [
+      { name: "orderId", type: "uint256" },
+      { name: "router", type: "address" },
+      { name: "swapData", type: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    name: "getOrderView",
+    type: "function",
+    inputs: [{ name: "orderId", type: "uint256" }],
+    outputs: [
+      {
+        name: "order",
+        type: "tuple",
+        components: [
+          { name: "maker", type: "address" },
+          { name: "tokenIn", type: "address" },
+          { name: "tokenOut", type: "address" },
+          { name: "amountIn", type: "uint256" },
+          { name: "minAmountOut", type: "uint256" },
+          { name: "expiry", type: "uint64" },
+          { name: "status", type: "uint8" },
+        ],
+      },
+      { name: "isExpired", type: "bool" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    name: "claimable",
+    type: "function",
+    inputs: [
+      { name: "", type: "address" },
+      { name: "", type: "address" },
+    ],
+    outputs: [{ type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    name: "OrderCreated",
+    type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "maker", type: "address", indexed: true },
+      { name: "tokenIn", type: "address", indexed: false },
+      { name: "tokenOut", type: "address", indexed: false },
+      { name: "amountIn", type: "uint256", indexed: false },
+      { name: "minAmountOut", type: "uint256", indexed: false },
+      { name: "expiry", type: "uint64", indexed: false },
+    ],
+  },
+  {
+    name: "OrderCancelled",
+    type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "maker", type: "address", indexed: true },
+      { name: "refund", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "OrderFilled",
+    type: "event",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "router", type: "address", indexed: true },
+      { name: "amountOut", type: "uint256", indexed: false },
     ],
   },
 ] as const;

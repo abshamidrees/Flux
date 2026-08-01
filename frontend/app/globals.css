@@ -443,3 +443,19 @@ a { text-decoration: none; }
   flex-shrink: 0;
 }
 .icon-btn:hover { border-color: var(--bdr2); color: var(--tx); }
+
+/* ── Header Swap entry — labelled sibling of .icon-btn (bell / theme) ────── */
+.swap-header-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 36px; padding: 0 12px;
+  background: var(--bg3); border: 1px solid var(--bdr); border-radius: 9px;
+  font-family: 'Manrope', sans-serif; font-size: 13px; font-weight: 600;
+  color: var(--tx); text-decoration: none; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s; flex-shrink: 0;
+}
+.swap-header-btn:hover { background: var(--bg4); border-color: var(--bdr2); }
+.swap-header-btn svg { color: var(--tx2); }
+@media (max-width: 520px) {
+  .swap-header-btn { padding: 0; width: 36px; justify-content: center; }
+  .swap-header-btn span { display: none; }
+}

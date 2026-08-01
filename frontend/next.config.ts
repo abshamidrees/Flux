@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
       ...config.resolve.alias,
       "pino-pretty": false,
       "@react-native-async-storage/async-storage": false,
+      // ws's optional native addons — unused in the browser (WalletConnect via
+      // Privy pulls in ws transitively); their prebuilt binaries aren't always
+      // present on Windows installs and webpack fails resolving them statically.
+      "utf-8-validate": false,
+      "bufferutil": false,
     };
     return config;
   },

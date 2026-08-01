@@ -10,6 +10,7 @@ import { FluxMark, NetworkBanner } from "../../components/UI";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { NotificationBell } from "../../components/NotificationBell";
 import { IconSun, IconMoon } from "../../components/icons";
+import { SwapButton } from "../../components/swap/SwapButton";
 
 const NAV = [
   { href: "/app",         label: "Dashboard" },
@@ -46,21 +47,23 @@ function WalletMenu({ address, balance, onDisconnect }: {
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
+      {/* Same card treatment as the other header buttons (bell, theme, Swap):
+          --bg3 fill, --bdr border, 36px height, bg3->bg4 hover — no teal. */}
       <button
         onClick={() => setOpen(o => !o)}
         style={{
           fontFamily: "'Manrope',sans-serif", fontSize: 13, fontWeight: 600,
-          color: "var(--tx2)", background: "transparent",
-          border: "1px solid var(--bdr)", padding: "6px 12px",
-          borderRadius: 8, cursor: "pointer",
-          display: "flex", alignItems: "center", gap: 7, transition: "all 0.15s",
+          color: "var(--tx)", background: "var(--bg3)",
+          border: "1px solid var(--bdr)", height: 36, padding: "0 12px",
+          borderRadius: 9, cursor: "pointer",
+          display: "flex", alignItems: "center", gap: 7, transition: "background 0.15s, border-color 0.15s",
         }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--teal)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--teal)"; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--bdr)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--tx2)"; }}
+        onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.background = "var(--bg4)"; el.style.borderColor = "var(--bdr2)"; }}
+        onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.background = "var(--bg3)"; el.style.borderColor = "var(--bdr)"; }}
       >
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981", display: "inline-block", flexShrink: 0 }} />
         {shortAddress(address)}
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "none" }}>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "none", color: "var(--tx2)" }}>
           <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
         </svg>
       </button>
@@ -188,18 +191,14 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
             {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
           </button>
 
+          {/* Swap — action, left of the wallet chip (spec §5) */}
+          <SwapButton />
+
           {/* Wallet */}
           {!ready ? (
             <div className="btn btn-ghost btn-sm" style={{ opacity: 0.5, pointerEvents: "none" }}>Loading…</div>
           ) : authenticated && address ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {displayBalance && (
-                <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, color: "#10b981" }}>
-                  {displayBalance} <span style={{ color: "var(--tx3)" }}>USDC</span>
-                </span>
-              )}
-              <WalletMenu address={address} balance={displayBalance} onDisconnect={logout} />
-            </div>
+            <WalletMenu address={address} balance={displayBalance} onDisconnect={logout} />
           ) : (
             <button onClick={login} className="btn btn-primary btn-sm">
               Connect Wallet
