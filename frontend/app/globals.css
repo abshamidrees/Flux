@@ -471,7 +471,18 @@ a { text-decoration: none; }
   .hero-mock     { order: -1; max-width: 440px; margin: 0 auto; width: 100%; }
   .features-grid { grid-template-columns: 1fr; gap: 36px; }
   .footer-grid   { grid-template-columns: 1fr; gap: 36px; }
-  .nav-links-sm  { display: none; }
+  /* .nav-links-sm also has an inline style={{display:"flex"}} — inline
+     styles always beat a plain stylesheet rule, so this needs !important
+     to actually hide the links (otherwise they keep rendering on mobile
+     and push the "Get Started" button off the right edge of the screen). */
+  .nav-links-sm  { display: none !important; }
+  /* The hero section's min-height:100vh (inline style) is sized for the
+     two-column desktop layout; once .hero-grid collapses to one column
+     just above, the stacked content is much shorter than a full screen,
+     and align-items:center (also inline) centers it — leaving equal dead
+     gradient gaps above and below the content. !important is required
+     here too, to beat the inline style. */
+  .hero-section  { min-height: 0 !important; }
 }
 
 @media (max-width: 768px) {
