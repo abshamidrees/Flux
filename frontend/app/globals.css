@@ -367,10 +367,16 @@ a { text-decoration: none; }
   gap: 16px;
 }
 
-/* App/docs topnav mobile collapse — base (desktop) state; overridden below */
-.app-nav-toggle { display: none; }
+/* App/docs topnav mobile collapse — base (desktop) state; overridden below.
+   Selectors are doubled up with .icon-btn (not just .app-nav-toggle) because
+   .icon-btn also sets display:flex unconditionally — at equal specificity
+   the later rule in the file wins regardless of media query, which is what
+   made the hamburger show on desktop too. The compound selector's higher
+   specificity fixes that regardless of declaration order. */
+.icon-btn.app-nav-toggle { display: none; }
 .wallet-connect-short { display: none; }
-.docs-nav-toggle { display: none; }
+.icon-btn.docs-nav-toggle { display: none; }
+.app-tabbar { display: none; }
 
 @media (max-width: 900px) {
   .batch-grid { grid-template-columns: 1fr; }
@@ -382,7 +388,7 @@ a { text-decoration: none; }
   .docs-header-pad    { padding: 0 14px !important; }
   .docs-sidebar       { display: none !important; }
   .docs-toc-wrap       { display: none; }
-  .docs-nav-toggle    { display: flex; }
+  .icon-btn.docs-nav-toggle { display: flex; }
   .docs-network-badge { display: none; }
   .docs-main          { padding: 24px 16px 60px !important; }
 }
@@ -406,7 +412,9 @@ a { text-decoration: none; }
   .tbl th, .tbl td { font-size: 11px; padding: 8px 10px; }
   .app-header-pad { padding: 0 14px !important; }
   .app-nav-links  { display: none !important; }
-  .app-nav-toggle { display: flex; }
+  .icon-btn.app-nav-toggle { display: flex; }
+  .app-tabbar     { display: flex; }
+  .app-main-pad   { padding-bottom: 76px; }
 }
 @media (max-width: 420px) {
   .wallet-connect-full  { display: none; }
@@ -419,6 +427,24 @@ a { text-decoration: none; }
   .page-pad   { padding: 14px 12px; }
   .grid-1-mobile { grid-template-columns: 1fr; }
 }
+
+/* ── Mobile bottom tab bar (app section only) ───────────────────────────
+   display:none lives in the base rule above (with the nav-toggle classes)
+   so it stays ahead of the 768px override in source order — see the note
+   up there about why that ordering matters. */
+.app-tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+  background: var(--bg2); border-top: 1px solid var(--bdr);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+  justify-content: space-around;
+}
+.app-tabbar-item {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  flex: 1; padding: 6px 4px; margin: 0 2px; border-radius: 10px;
+  font-family: 'Manrope', sans-serif; font-size: 10px; font-weight: 700;
+  color: var(--tx3); text-decoration: none; transition: color 0.15s, background 0.15s;
+}
+.app-tabbar-item.active { color: var(--teal); background: var(--teal-10); }
 
 /* Batch "Add manually" row — 3-column on desktop, stacks on mobile */
 .batch-add-row {

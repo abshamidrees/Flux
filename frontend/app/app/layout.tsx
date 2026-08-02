@@ -9,14 +9,14 @@ import { USDC_ADDRESS, shortAddress } from "../../lib/arc";
 import { FluxMark, NetworkBanner } from "../../components/UI";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { NotificationBell } from "../../components/NotificationBell";
-import { IconSun, IconMoon, IconMenu } from "../../components/icons";
+import { IconSun, IconMoon, IconMenu, IconHome, IconBatch, IconStream, IconAgent } from "../../components/icons";
 import { SwapButton } from "../../components/swap/SwapButton";
 
 const NAV = [
-  { href: "/",         label: "Dashboard" },
-  { href: "/batch",    label: "Batch"     },
-  { href: "/streams",  label: "Streams"   },
-  { href: "/agents",   label: "Agents"    },
+  { href: "/",         label: "Dashboard", icon: IconHome   },
+  { href: "/batch",    label: "Batch",     icon: IconBatch  },
+  { href: "/streams",  label: "Streams",   icon: IconStream },
+  { href: "/agents",   label: "Agents",    icon: IconAgent  },
 ];
 
 function CopyIcon() {
@@ -269,6 +269,28 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
   );
 }
 
+/* Thumb-reachable primary nav on mobile/portrait (spec: match the bottom
+   tab-bar pattern competitor apps use — SoDEX, Rise — instead of making
+   people scroll to the Actions cards or open the header dropdown). Desktop
+   never sees this; .app-tabbar is display:none until the 768px breakpoint. */
+function MobileTabBar() {
+  const path = usePathname();
+  return (
+    <nav className="app-tabbar">
+      {NAV.map(n => {
+        const active = path === n.href;
+        const Icon = n.icon;
+        return (
+          <Link key={n.href} href={n.href} className={`app-tabbar-item${active ? " active" : ""}`}>
+            <Icon size={20} />
+            <span>{n.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState("dark");
   const [mounted, setMounted] = useState(false);
@@ -291,9 +313,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="app-root" data-theme={theme}>
       <AppNav theme={theme} toggleTheme={toggleTheme} />
       <NetworkBanner />
-      <main style={{ minHeight: "calc(100vh - 56px)" }}>
+      <main className="app-main-pad" style={{ minHeight: "calc(100vh - 56px)" }}>
         {children}
       </main>
+      <MobileTabBar />
     </div>
   );
 }

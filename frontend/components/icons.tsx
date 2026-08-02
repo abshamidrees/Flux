@@ -173,6 +173,16 @@ export function IconMenu({ size = 18, ...p }: IconProps) {
   );
 }
 
+/* ── Dashboard / home ── */
+export function IconHome({ size = 20, ...p }: IconProps) {
+  return (
+    <svg {...base(size)} {...p}>
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9" />
+    </svg>
+  );
+}
+
 /* ── Sun / dark-light toggle ── */
 export function IconSun({ size = 18, ...p }: IconProps) {
   return (
