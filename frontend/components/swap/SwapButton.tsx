@@ -9,7 +9,7 @@ import { IconSwap } from "./icons";
 
 export function SwapButton() {
   return (
-    <Link href="/app/swap" className="swap-header-btn" aria-label="Open swap">
+    <Link href="/swap" className="swap-header-btn" aria-label="Open swap">
       <IconSwap size={15} />
       <span>Swap</span>
     </Link>

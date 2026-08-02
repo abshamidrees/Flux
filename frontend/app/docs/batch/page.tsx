@@ -7,7 +7,7 @@ import { FLUX_ADDRESS } from "../../../lib/arc";
 export default function DocsBatchPage() {
   return (
     <div>
-      <Breadcrumbs trail={[{ label: "Docs", href: "/docs" }, { label: "Batch Settlement" }]} />
+      <Breadcrumbs trail={[{ label: "Docs", href: "/" }, { label: "Batch Settlement" }]} />
       <H1 id="batch-settlement">Batch Settlement</H1>
       <P>Send USDC to up to 500 recipients in a single on-chain transaction. Flux batches all transfers into one contract call, charging a flat 0.1% platform fee on the total amount settled.</P>
 
@@ -38,7 +38,7 @@ Total you approve:   $7.2072`}</CodeBlock>
       <P>The History tab loads all your past batch settlements live from the blockchain — no cache, no local storage. Every settled batch shows timestamp, recipient count, total USDC, fee, and a link to the ArcScan transaction. You can export your full history as a CSV.</P>
 
       <H2 id="contract">Contract</H2>
-      <P>Batch settlement is handled by <code>FluxSettlement.batchSettle()</code>. Full ABI and events are in the <a href="/docs/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page.</P>
+      <P>Batch settlement is handled by <code>FluxSettlement.batchSettle()</code>. Full ABI and events are in the <a href="/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page.</P>
       <P><AddressLink address={FLUX_ADDRESS || "0x0BBBc1C77ada4d584445383B77b88DDdDAae2F6A"} label="FluxSettlement on ArcScan" /></P>
     </div>
   );

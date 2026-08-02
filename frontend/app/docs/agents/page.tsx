@@ -7,7 +7,7 @@ import { FLUX_ADDRESS } from "../../../lib/arc";
 export default function DocsAgentsPage() {
   return (
     <div>
-      <Breadcrumbs trail={[{ label: "Docs", href: "/docs" }, { label: "Agent Registry" }]} />
+      <Breadcrumbs trail={[{ label: "Docs", href: "/" }, { label: "Agent Registry" }]} />
       <H1 id="agent-registry">Agent Registry</H1>
       <P>Register AI agent wallets with USDC spending caps. Once registered, an agent calls <code>agentPay()</code> from its own wallet to send USDC autonomously — no manual approval per payment — as long as it stays within its cap.</P>
 
@@ -40,7 +40,7 @@ function agentPay(address recipient, uint256 amount) external onlyActiveAgent {
       <P>The budget cap is cumulative — once an agent has spent its full cap, it cannot make further payments. The owner must register a new agent or raise the cap via <code>updateAgent()</code>. This is intentional: it limits blast radius if an agent is compromised.</P>
 
       <H2 id="contract">Contract</H2>
-      <P>Agents are handled by <code>FluxSettlement.registerAgent()</code>, <code>updateAgent()</code>, and <code>agentPay()</code>. Full ABI and events are in the <a href="/docs/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page.</P>
+      <P>Agents are handled by <code>FluxSettlement.registerAgent()</code>, <code>updateAgent()</code>, and <code>agentPay()</code>. Full ABI and events are in the <a href="/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page.</P>
       <P><AddressLink address={FLUX_ADDRESS || "0x0BBBc1C77ada4d584445383B77b88DDdDAae2F6A"} label="FluxSettlement on ArcScan" /></P>
     </div>
   );

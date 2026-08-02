@@ -7,7 +7,7 @@ import { FLUX_ADDRESS } from "../../../lib/arc";
 export default function DocsStreamsPage() {
   return (
     <div>
-      <Breadcrumbs trail={[{ label: "Docs", href: "/docs" }, { label: "Payment Streams" }]} />
+      <Breadcrumbs trail={[{ label: "Docs", href: "/" }, { label: "Payment Streams" }]} />
       <H1 id="payment-streams">Payment Streams</H1>
       <P>Lock USDC in the Flux contract and release it linearly over time to a recipient. Used for payroll, contractor payments, token grants, and subscription billing.</P>
 
@@ -36,7 +36,7 @@ export default function DocsStreamsPage() {
       <P>Go to Streams → My Streams. All streams you&apos;ve created are listed with their ID, status, amount, and dates. IDs are assigned by the contract sequentially, starting from 0.</P>
 
       <H2 id="contract">Contract</H2>
-      <P>Streams are handled by <code>FluxSettlement.createStream()</code>, <code>withdrawFromStream()</code>, and <code>cancelStream()</code>. Full ABI and events are in the <a href="/docs/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page.</P>
+      <P>Streams are handled by <code>FluxSettlement.createStream()</code>, <code>withdrawFromStream()</code>, and <code>cancelStream()</code>. Full ABI and events are in the <a href="/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page.</P>
       <P><AddressLink address={FLUX_ADDRESS || "0x0BBBc1C77ada4d584445383B77b88DDdDAae2F6A"} label="FluxSettlement on ArcScan" /></P>
     </div>
   );

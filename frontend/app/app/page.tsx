@@ -156,7 +156,7 @@ export default function Dashboard() {
               <div className="stat-num">{myStreamCount !== null ? myStreamCount : "—"}</div>
             )}
             <div style={{ fontSize:12, color:"var(--tx3)", marginTop:4 }}>
-              <Link href="/app/streams" style={{ color:"var(--teal)", fontWeight:600, fontSize:12 }}>View streams →</Link>
+              <Link href="/streams" style={{ color:"var(--teal)", fontWeight:600, fontSize:12 }}>View streams →</Link>
             </div>
           </div>
 
@@ -167,7 +167,7 @@ export default function Dashboard() {
             </div>
             <div className="stat-num">{myAgentCount !== null ? myAgentCount : "—"}</div>
             <div style={{ fontSize:12, color:"var(--tx3)", marginTop:4 }}>
-              <Link href="/app/agents" style={{ color:"var(--teal)", fontWeight:600, fontSize:12 }}>Manage agents →</Link>
+              <Link href="/agents" style={{ color:"var(--teal)", fontWeight:600, fontSize:12 }}>Manage agents →</Link>
             </div>
           </div>
         </div>
@@ -177,9 +177,9 @@ export default function Dashboard() {
       <div style={{ marginBottom:24 }}>
         <div className="lbl" style={{ marginBottom:12 }}>ACTIONS</div>
         <div className="grid-1-mobile">
-          <ActionCard href="/app/batch"   icon={<IconBatch size={26} />}  title="Batch Settlement"  desc="Send USDC to up to 500 recipients in a single transaction. Import CSV or add manually." primary />
-          <ActionCard href="/app/streams" icon={<IconStream size={26} />} title="Payment Streams"   desc="Linear USDC vesting for payroll, contractor agreements, and token grants. Cancel anytime." />
-          <ActionCard href="/app/agents"  icon={<IconAgent size={26} />}  title="Agent Registry"    desc="Register AI wallets with USDC spending caps for fully autonomous onchain commerce." />
+          <ActionCard href="/batch"   icon={<IconBatch size={26} />}  title="Batch Settlement"  desc="Send USDC to up to 500 recipients in a single transaction. Import CSV or add manually." primary />
+          <ActionCard href="/streams" icon={<IconStream size={26} />} title="Payment Streams"   desc="Linear USDC vesting for payroll, contractor agreements, and token grants. Cancel anytime." />
+          <ActionCard href="/agents"  icon={<IconAgent size={26} />}  title="Agent Registry"    desc="Register AI wallets with USDC spending caps for fully autonomous onchain commerce." />
         </div>
       </div>
     </div>

@@ -21,7 +21,7 @@ function RouteRow({ id, name, status, note }: { id: "xylonet" | "unitflow" | "sy
 export default function DocsSwapPage() {
   return (
     <div>
-      <Breadcrumbs trail={[{ label: "Docs", href: "/docs" }, { label: "Swap" }]} />
+      <Breadcrumbs trail={[{ label: "Docs", href: "/" }, { label: "Swap" }]} />
       <H1 id="overview">Overview</H1>
       <P>USDC is Flux&apos;s settlement currency — batch payouts, streams, and agent spend caps are all denominated in it. Swap exists so that holding a different Arc asset never blocks you from using the rest of Flux: convert into USDC in-app, in one transaction, without going anywhere else.</P>
 

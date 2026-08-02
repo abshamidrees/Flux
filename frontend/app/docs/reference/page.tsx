@@ -18,7 +18,7 @@ function AddrRow({ label, address }: { label: string; address: string }) {
 export default function DocsReferencePage() {
   return (
     <div>
-      <Breadcrumbs trail={[{ label: "Docs", href: "/docs" }, { label: "Reference" }]} />
+      <Breadcrumbs trail={[{ label: "Docs", href: "/" }, { label: "Reference" }]} />
       <H1 id="contract-addresses">Contract addresses</H1>
       <P>Every address Flux talks to on Arc Testnet (5042002). All link to ArcScan.</P>
 

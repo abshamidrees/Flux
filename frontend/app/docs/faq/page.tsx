@@ -23,7 +23,7 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
 export default function DocsFaqPage() {
   return (
     <div>
-      <Breadcrumbs trail={[{ label: "Docs", href: "/docs" }, { label: "FAQ" }]} />
+      <Breadcrumbs trail={[{ label: "Docs", href: "/" }, { label: "FAQ" }]} />
       <H1 id="faq">FAQ</H1>
 
       <GroupLabel>Getting started</GroupLabel>

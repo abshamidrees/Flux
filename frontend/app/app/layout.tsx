@@ -9,14 +9,14 @@ import { USDC_ADDRESS, shortAddress } from "../../lib/arc";
 import { FluxMark, NetworkBanner } from "../../components/UI";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { NotificationBell } from "../../components/NotificationBell";
-import { IconSun, IconMoon } from "../../components/icons";
+import { IconSun, IconMoon, IconMenu } from "../../components/icons";
 import { SwapButton } from "../../components/swap/SwapButton";
 
 const NAV = [
-  { href: "/app",         label: "Dashboard" },
-  { href: "/app/batch",   label: "Batch"     },
-  { href: "/app/streams", label: "Streams"   },
-  { href: "/app/agents",  label: "Agents"    },
+  { href: "/",         label: "Dashboard" },
+  { href: "/batch",    label: "Batch"     },
+  { href: "/streams",  label: "Streams"   },
+  { href: "/agents",   label: "Agents"    },
 ];
 
 function CopyIcon() {
@@ -141,6 +141,18 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
     ? parseFloat(bal.formatted).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })
     : null;
 
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fn = (e: MouseEvent) => { if (mobileRef.current && !mobileRef.current.contains(e.target as Node)) setMobileOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
+
+  // Close the mobile menu on route change so it doesn't stay open after navigating.
+  useEffect(() => { setMobileOpen(false); }, [path]);
+
   return (
     <header style={{
       position: "sticky", top: 0, zIndex: 100,
@@ -149,31 +161,72 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
       WebkitBackdropFilter: "blur(20px)",
       borderBottom: "1px solid var(--bdr)",
     }}>
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className="app-header-pad" style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
 
         {/* Logo + Nav */}
-        <div style={{ display: "flex", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center" }} ref={mobileRef}>
+          {/* Mobile nav toggle — hidden on desktop, shown <=768px (globals.css) */}
+          <button
+            className="icon-btn app-nav-toggle"
+            style={{ marginRight: 10 }}
+            onClick={() => setMobileOpen(o => !o)}
+            title="Menu"
+            aria-label="Toggle navigation menu"
+          >
+            <IconMenu size={16} />
+          </button>
+
           <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9, marginRight: 28, textDecoration: "none" }}>
             <FluxMark size={26} />
             <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 16, color: "var(--tx)", letterSpacing: "-0.03em" }}>Flux</span>
           </Link>
 
-          {NAV.map(n => {
-            const active = path === n.href;
-            return (
-              <Link key={n.href} href={n.href} style={{
-                fontFamily: "'Manrope',sans-serif", fontSize: 13,
-                fontWeight: active ? 700 : 600,
-                color: active ? "var(--teal)" : "var(--tx2)",
-                padding: "5px 12px", borderRadius: 7,
-                background: active ? "var(--teal-10)" : "transparent",
-                border: active ? "1px solid var(--teal-20)" : "1px solid transparent",
-                textDecoration: "none", transition: "all 0.15s",
-              }}>
-                {n.label}
-              </Link>
-            );
-          })}
+          {/* Desktop nav links — hidden <=768px in favour of the dropdown below */}
+          <div className="app-nav-links" style={{ display: "flex", alignItems: "center" }}>
+            {NAV.map(n => {
+              const active = path === n.href;
+              return (
+                <Link key={n.href} href={n.href} style={{
+                  fontFamily: "'Manrope',sans-serif", fontSize: 13,
+                  fontWeight: active ? 700 : 600,
+                  color: active ? "var(--teal)" : "var(--tx2)",
+                  padding: "5px 12px", borderRadius: 7,
+                  background: active ? "var(--teal-10)" : "transparent",
+                  border: active ? "1px solid var(--teal-20)" : "1px solid transparent",
+                  textDecoration: "none", transition: "all 0.15s",
+                }}>
+                  {n.label}
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Mobile nav dropdown */}
+          {mobileOpen && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 8px)", left: 14, right: 14,
+              background: "var(--bg2)", border: "1px solid var(--bdr2)",
+              borderRadius: 10, padding: 6,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+              zIndex: 500, animation: "slideUp 0.15s ease",
+            }}>
+              {NAV.map(n => {
+                const active = path === n.href;
+                return (
+                  <Link key={n.href} href={n.href} style={{
+                    display: "block", fontFamily: "'Manrope',sans-serif", fontSize: 14,
+                    fontWeight: active ? 700 : 600,
+                    color: active ? "var(--teal)" : "var(--tx)",
+                    background: active ? "var(--teal-10)" : "transparent",
+                    padding: "10px 12px", borderRadius: 7,
+                    textDecoration: "none",
+                  }}>
+                    {n.label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Right */}
@@ -200,8 +253,9 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
           ) : authenticated && address ? (
             <WalletMenu address={address} balance={displayBalance} onDisconnect={logout} />
           ) : (
-            <button onClick={login} className="btn btn-primary btn-sm">
-              Connect Wallet
+            <button onClick={login} className="btn btn-primary btn-sm wallet-connect-btn">
+              <span className="wallet-connect-full">Connect Wallet</span>
+              <span className="wallet-connect-short">Connect</span>
             </button>
           )}
         </div>

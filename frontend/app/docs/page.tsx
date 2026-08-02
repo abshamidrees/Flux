@@ -24,14 +24,14 @@ export default function DocsIndexPage() {
 
       <H2 id="features">Features</H2>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 32 }}>
-        <FeatureCard icon={<IconBatch size={18} />} title="Batch Settlement" desc="Pay up to 500 wallets in one transaction. CSV upload or manual entry." href="/docs/batch" />
-        <FeatureCard icon={<IconStream size={18} />} title="Payment Streams" desc="Linear USDC vesting for payroll, grants, and contractor agreements." href="/docs/streams" />
-        <FeatureCard icon={<IconAgent size={18} />} title="Agent Registry" desc="Register AI wallets with USDC spending caps for autonomous commerce." href="/docs/agents" />
-        <FeatureCard icon={<IconSwap size={18} />} title="Swap" desc="Convert any Arc asset to USDC in-app, routed across every venue for the best price." href="/docs/swap" />
+        <FeatureCard icon={<IconBatch size={18} />} title="Batch Settlement" desc="Pay up to 500 wallets in one transaction. CSV upload or manual entry." href="/batch" />
+        <FeatureCard icon={<IconStream size={18} />} title="Payment Streams" desc="Linear USDC vesting for payroll, grants, and contractor agreements." href="/streams" />
+        <FeatureCard icon={<IconAgent size={18} />} title="Agent Registry" desc="Register AI wallets with USDC spending caps for autonomous commerce." href="/agents" />
+        <FeatureCard icon={<IconSwap size={18} />} title="Swap" desc="Convert any Arc asset to USDC in-app, routed across every venue for the best price." href="/swap" />
       </div>
 
       <H2 id="how-it-works">How it works</H2>
-      <P>Batch settlement, streams, and the agent registry all live in one deployed contract, <InlineCode>FluxSettlement.sol</InlineCode>. Swap and limit orders are handled separately by third-party routers and <InlineCode>FluxLimitOrder.sol</InlineCode> — see the <a href="/docs/swap" style={{ color: "var(--teal-l)" }}>Swap docs</a>. Wallet connection is handled by Privy (MetaMask or email login). Every transaction settles on-chain.</P>
+      <P>Batch settlement, streams, and the agent registry all live in one deployed contract, <InlineCode>FluxSettlement.sol</InlineCode>. Swap and limit orders are handled separately by third-party routers and <InlineCode>FluxLimitOrder.sol</InlineCode> — see the <a href="/swap" style={{ color: "var(--teal-l)" }}>Swap docs</a>. Wallet connection is handled by Privy (MetaMask or email login). Every transaction settles on-chain.</P>
 
       <H2 id="quickstart">Quickstart</H2>
       <H3>1. Add Arc Testnet to your wallet</H3>
@@ -48,7 +48,7 @@ Explorer:       https://testnet.arcscan.app`}</CodeBlock>
       <P>Visit <strong>fluxonarc.xyz</strong>, click Connect Wallet in the top-right, and choose MetaMask or email login. Once connected, your USDC balance appears in the header and every feature unlocks.</P>
 
       <H2 id="network-addresses">Network &amp; addresses</H2>
-      <P>Every contract Flux deploys, in one place — see the full <a href="/docs/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page for ABIs and events. All addresses link to ArcScan.</P>
+      <P>Every contract Flux deploys, in one place — see the full <a href="/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page for ABIs and events. All addresses link to ArcScan.</P>
       <CodeBlock label="Arc Testnet">{`Chain ID:   5042002
 RPC:        https://rpc.testnet.arc.network
 Explorer:   https://testnet.arcscan.app

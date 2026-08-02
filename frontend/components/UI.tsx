@@ -8,20 +8,14 @@ import { arcTestnet } from "../lib/arc";
 /* ─── Logo ──────────────────────────────────────────────── */
 export function FluxMark({ size = 28 }: { size?: number }) {
   return (
-    <div style={{
-      width: size, height: size, background: "#0f766e",
-      borderRadius: size * 0.22, display: "flex", alignItems: "center",
-      justifyContent: "center", flexShrink: 0,
-      boxShadow: "0 2px 10px rgba(15,118,110,0.35)",
-    }}>
-      <svg width={size * 0.72} height={size * 0.72} viewBox="0 0 80 80" fill="none">
-        <line x1="12" y1="22" x2="52" y2="40" stroke="white" strokeWidth="3.5" strokeLinecap="round"/>
-        <line x1="12" y1="40" x2="52" y2="40" stroke="white" strokeWidth="3.5" strokeLinecap="round"/>
-        <line x1="12" y1="58" x2="52" y2="40" stroke="white" strokeWidth="3.5" strokeLinecap="round"/>
-        <circle cx="52" cy="40" r="6" fill="white"/>
-        <path d="M62 33 Q70 40 62 47" stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-      </svg>
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/flux-logo.png"
+      alt="Flux"
+      width={size}
+      height={size}
+      style={{ width: size, height: size, display: "block", flexShrink: 0 }}
+    />
   );
 }
 

@@ -157,7 +157,7 @@ export function SwapStatus({
 
       <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
         <button className="btn btn-secondary btn-full" onClick={onSwapAgain}>Swap again</button>
-        <Link href="/app" className="btn btn-primary btn-full" style={{ textDecoration: "none" }}>Back to dashboard</Link>
+        <Link href="/" className="btn btn-primary btn-full" style={{ textDecoration: "none" }}>Back to dashboard</Link>
       </div>
     </div>
   );

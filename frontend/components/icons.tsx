@@ -162,6 +162,17 @@ export function IconBell({ size = 18, ...p }: IconProps) {
   );
 }
 
+/* ── Menu (mobile nav toggle) ── */
+export function IconMenu({ size = 18, ...p }: IconProps) {
+  return (
+    <svg {...base(size)} {...p}>
+      <line x1="3" y1="6"  x2="21" y2="6"  />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+
 /* ── Sun / dark-light toggle ── */
 export function IconSun({ size = 18, ...p }: IconProps) {
   return (

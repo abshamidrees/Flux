@@ -42,7 +42,7 @@ export function SwapOverlay() {
 
   const close = () => {
     if (typeof window !== "undefined" && window.history.length > 1) router.back();
-    else router.push("/app");
+    else router.push("/");
   };
 
   const toggleRoute = (id: RouteId) => {

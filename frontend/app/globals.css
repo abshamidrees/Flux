@@ -367,10 +367,24 @@ a { text-decoration: none; }
   gap: 16px;
 }
 
+/* App/docs topnav mobile collapse — base (desktop) state; overridden below */
+.app-nav-toggle { display: none; }
+.wallet-connect-short { display: none; }
+.docs-nav-toggle { display: none; }
+
 @media (max-width: 900px) {
   .batch-grid { grid-template-columns: 1fr; }
   .grid-1-mobile { grid-template-columns: 1fr 1fr; gap: 10px; }
   .form-grid-2 { grid-template-columns: 1fr; }
+  /* Docs persistent sidebar + on-page TOC collapse into the hamburger
+     dropdown below (see app/docs/layout.tsx) — their combined 420px fixed
+     width doesn't fit any mobile/tablet viewport. */
+  .docs-header-pad    { padding: 0 14px !important; }
+  .docs-sidebar       { display: none !important; }
+  .docs-toc-wrap       { display: none; }
+  .docs-nav-toggle    { display: flex; }
+  .docs-network-badge { display: none; }
+  .docs-main          { padding: 24px 16px 60px !important; }
 }
 @media (max-width: 768px) {
   .grid-1-mobile  { grid-template-columns: 1fr; gap: 10px; }
@@ -390,6 +404,14 @@ a { text-decoration: none; }
   .modal-box      { width: calc(100vw - 32px); max-width: none; }
   .net-banner     { margin: 10px 14px 0; }
   .tbl th, .tbl td { font-size: 11px; padding: 8px 10px; }
+  .app-header-pad { padding: 0 14px !important; }
+  .app-nav-links  { display: none !important; }
+  .app-nav-toggle { display: flex; }
+}
+@media (max-width: 420px) {
+  .wallet-connect-full  { display: none; }
+  .wallet-connect-short { display: inline; }
+  .docs-badge-label     { display: none; }
 }
 @media (max-width: 480px) {
   .grid-stats { grid-template-columns: 1fr; }
@@ -458,4 +480,17 @@ a { text-decoration: none; }
 @media (max-width: 520px) {
   .swap-header-btn { padding: 0; width: 36px; justify-content: center; }
   .swap-header-btn span { display: none; }
+}
+
+/* ── Privy login modal — mobile viewport fix ────────────────────────────
+   Privy's dialog backdrop sizes itself with `100vh`, which mobile Chrome/
+   Safari resolve to the browser-chrome-collapsed "large" viewport rather
+   than what's actually visible — so while the address bar is showing, the
+   backdrop (and the dialog it centers) is taller than the real screen and
+   gets pushed mostly below the fold. `100dvh` tracks the real visible
+   viewport instead. Scoped to mobile: this only manifests where the toolbar
+   can collapse. (SDK is @privy-io/react-auth 1.93 — a future major upgrade
+   may fix this upstream; this is a CSS-only safety net until then.) */
+@media (max-width: 768px) {
+  #privy-dialog-backdrop { height: 100dvh !important; }
 }
