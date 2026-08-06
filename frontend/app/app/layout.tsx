@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
-import { useAccount, useBalance } from "wagmi";
+import { useBalance } from "wagmi";
 import { useState, useEffect, useRef } from "react";
 import { USDC_ADDRESS, shortAddress } from "../../lib/arc";
 import { FluxMark, NetworkBanner } from "../../components/UI";
@@ -11,6 +11,7 @@ import { LoadingScreen } from "../../components/LoadingScreen";
 import { NotificationBell } from "../../components/NotificationBell";
 import { IconSun, IconMoon, IconMenu, IconHome, IconBatch, IconStream, IconAgent } from "../../components/icons";
 import { SwapButton } from "../../components/swap/SwapButton";
+import { useWallet } from "../../lib/wallet/WalletContext";
 
 const NAV = [
   { href: "/",         label: "Dashboard", icon: IconHome   },
@@ -129,10 +130,10 @@ function WalletMenu({ address, balance, onDisconnect }: {
 
 function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void }) {
   const path = usePathname();
-  const { login, logout, authenticated, ready } = usePrivy();
-  const { address } = useAccount();
+  const { ready } = usePrivy();
+  const { address, isConnected, openConnectModal, disconnect } = useWallet();
   const { data: bal } = useBalance({
-    address,
+    address: address ?? undefined,
     token: USDC_ADDRESS as `0x${string}`,
     query: { enabled: !!address && !!USDC_ADDRESS },
   });
@@ -247,13 +248,17 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
           {/* Swap — action, left of the wallet chip (spec §5) */}
           <SwapButton />
 
-          {/* Wallet */}
+          {/* Wallet — reads the unified context (lib/wallet/WalletContext),
+              so this correctly reflects either a Privy or a Circle wallet.
+              !ready still gates on Privy specifically: it's Privy's own
+              "have we finished checking for an existing session" flag, and
+              Circle has no equivalent async-init state to fold in. */}
           {!ready ? (
             <div className="btn btn-ghost btn-sm" style={{ opacity: 0.5, pointerEvents: "none" }}>Loading…</div>
-          ) : authenticated && address ? (
-            <WalletMenu address={address} balance={displayBalance} onDisconnect={logout} />
+          ) : isConnected && address ? (
+            <WalletMenu address={address} balance={displayBalance} onDisconnect={disconnect} />
           ) : (
-            <button onClick={login} className="btn btn-primary btn-sm wallet-connect-btn">
+            <button onClick={openConnectModal} className="btn btn-primary btn-sm wallet-connect-btn">
               <span className="wallet-connect-full">Connect Wallet</span>
               <span className="wallet-connect-short">Connect</span>
             </button>

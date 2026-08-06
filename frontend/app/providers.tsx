@@ -5,6 +5,8 @@ import { WagmiProvider } from "@privy-io/wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createConfig, http } from "wagmi";
 import { arcTestnet, ARC_RPC_URL } from "../lib/arc";
+import { WalletProvider } from "../lib/wallet/WalletContext";
+import { ConnectModal } from "../components/wallet/ConnectModal";
 
 // Real Flux mark supplied by the user (Phase F §5) — replaces the hand-drawn
 // SVG placeholder. Privy renders its login modal in an iframe on Privy's own
@@ -63,7 +65,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <WagmiProvider config={wagmiConfig} reconnectOnMount>
-          {children}
+          <WalletProvider>
+            {children}
+            <ConnectModal />
+          </WalletProvider>
         </WagmiProvider>
       </QueryClientProvider>
     </PrivyProvider>
