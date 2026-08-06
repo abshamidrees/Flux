@@ -56,7 +56,39 @@ function isUserRejection(e: any): boolean {
   );
 }
 
+// A transport/RPC failure (rate-limited, timed out, connection dropped) is a
+// completely different failure than an on-chain revert — the transaction
+// never reached the chain, vs. the chain rejected it. viem's wrapper errors
+// (e.g. ContractFunctionExecutionError) put a generic "the contract function
+// ... reverted" in shortMessage even when the underlying cause is transport-
+// level, because that message is boilerplate for "the call didn't succeed,"
+// not evidence of an actual EVM revert — so shortMessage alone is exactly
+// the wrong signal to trust here. Check every layer (top-level and .cause)
+// for the concrete transport indicators instead.
+function isTransportOrRateLimitError(e: any): boolean {
+  if (e?.code === -32005 || e?.cause?.code === -32005) return true;
+  const parts = [e?.shortMessage, e?.details, e?.message, e?.cause?.shortMessage, e?.cause?.details, e?.cause?.message]
+    .filter(Boolean)
+    .join(" \n ")
+    .toLowerCase();
+  return (
+    parts.includes("rate limit") ||
+    parts.includes("rate-limit") ||
+    parts.includes("rate limited") ||
+    parts.includes("too many requests") ||
+    parts.includes(" 429") ||
+    parts.includes("eth_sendrawtransaction") || // mentioning the RPC method itself means this is a transport-layer report, not a decoded revert reason
+    parts.includes("request timed out") ||
+    parts.includes("econnreset") ||
+    parts.includes("fetch failed") ||
+    parts.includes("http request failed")
+  );
+}
+
 function readableError(e: any): string {
+  if (isTransportOrRateLimitError(e)) {
+    return "Network is busy (RPC rate limited). Wait a moment and try again.";
+  }
   const msg = e?.shortMessage || e?.details || e?.message || "Transaction failed";
   if (/insufficient output|min.*out|slippage|INSUFFICIENT_OUTPUT/i.test(msg)) {
     return "Swap failed: insufficient output amount. The price moved beyond your slippage tolerance. Try again or raise slippage in settings.";
@@ -78,9 +110,16 @@ export function useSwapExecution() {
   const approve = useCallback(
     async (quote: Quote) => {
       if (!client) return;
+      // Tracked outside the try so the catch block can tell "the send itself
+      // never went through" (hash never assigned — genuinely safe to retry)
+      // apart from "it WAS broadcast and something failed afterward" (e.g. a
+      // rate-limited receipt poll) — those two cases must not be handled the
+      // same way, or a retry can double-submit a transaction that already
+      // landed.
+      let hash: `0x${string}` | undefined;
       try {
         setState({ status: "approving", txHash: null, error: null, realizedOut: null, executedQuote: quote });
-        const hash = await writeContractAsync({
+        hash = await writeContractAsync({
           address: quote.path[0],
           abi: ERC20_ABI,
           functionName: "approve",
@@ -92,8 +131,23 @@ export function useSwapExecution() {
         if (rcpt.status === "success") setState(IDLE);
         else setState({ status: "failed", txHash: hash, error: "Approval failed. Please try again.", realizedOut: null, executedQuote: quote });
       } catch (e) {
-        if (isUserRejection(e)) setState(IDLE);
-        else setState({ status: "failed", txHash: null, error: readableError(e), realizedOut: null, executedQuote: quote });
+        if (isUserRejection(e)) { setState(IDLE); return; }
+        if (hash) {
+          // Already broadcast — the failure happened while waiting for
+          // confirmation (a rate-limited poll is the common case here), not
+          // in the send itself. Check the real receipt before reporting
+          // anything, so a transaction that actually landed is never shown
+          // as "failed," and the hash is never lost.
+          try {
+            const rcpt = await client.getTransactionReceipt({ hash });
+            if (rcpt.status === "success") { setState(IDLE); return; }
+            setState({ status: "failed", txHash: hash, error: "Approval failed. Please try again.", realizedOut: null, executedQuote: quote });
+          } catch {
+            setState({ status: "failed", txHash: hash, error: readableError(e), realizedOut: null, executedQuote: quote });
+          }
+          return;
+        }
+        setState({ status: "failed", txHash: null, error: readableError(e), realizedOut: null, executedQuote: quote });
       }
     },
     [client, writeContractAsync],
@@ -107,6 +161,12 @@ export function useSwapExecution() {
     }) => {
       if (!client || !address) return;
       const { displayed, tokenOut, getFreshQuote } = opts;
+      // Same rationale as approve() above: only set once sendTransactionAsync
+      // actually returns a hash, so the catch block can tell a genuinely
+      // unsent attempt (safe to retry) apart from one that was broadcast and
+      // then failed while waiting for confirmation (must not be silently
+      // retried without checking whether it already landed).
+      let hash: `0x${string}` | undefined;
       try {
         // Re-quote immediately before signing; never sign against a stale quote.
         setState({ status: "re-quoting", txHash: null, error: null, realizedOut: null, executedQuote: displayed });
@@ -142,7 +202,7 @@ export function useSwapExecution() {
 
         const tx = fresh.buildTx();
         setState({ status: "awaiting-signature", txHash: null, error: null, realizedOut: null, executedQuote });
-        const hash = await sendTransactionAsync({ to: tx.to, data: tx.data, value: tx.value });
+        hash = await sendTransactionAsync({ to: tx.to, data: tx.data, value: tx.value });
 
         setState({ status: "pending", txHash: hash, error: null, realizedOut: null, executedQuote });
         const rcpt = await client.waitForTransactionReceipt({ hash });
@@ -166,8 +226,38 @@ export function useSwapExecution() {
         }
         setState({ status: "success", txHash: hash, error: null, realizedOut: realized ?? fresh.amountOut, executedQuote });
       } catch (e) {
-        if (isUserRejection(e)) setState(IDLE);
-        else setState({ status: "failed", txHash: null, error: readableError(e), realizedOut: null, executedQuote: displayed });
+        if (isUserRejection(e)) { setState(IDLE); return; }
+        if (hash) {
+          // Broadcast succeeded (we have a hash) — the failure happened
+          // afterward, most commonly a rate-limited receipt poll, not the
+          // swap itself failing. Re-check the real receipt before reporting
+          // "failed," so a swap that actually landed is never misreported,
+          // and the hash is preserved either way (never silently dropped) —
+          // that's what lets the UI show it and stops a retry from
+          // double-submitting.
+          try {
+            const rcpt = await client.getTransactionReceipt({ hash });
+            if (rcpt.status === "success") {
+              let realized: bigint | null = null;
+              try {
+                const logs = parseEventLogs({ abi: ERC20_ABI, eventName: "Transfer", logs: rcpt.logs });
+                realized = logs
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  .filter((l) => l.address.toLowerCase() === tokenOut.address.toLowerCase() && (l.args as any).to?.toLowerCase() === address.toLowerCase())
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  .reduce((sum, l) => sum + ((l.args as any).value as bigint), 0n);
+                if (realized === 0n) realized = null;
+              } catch { /* fall back to the displayed quote for the amount */ }
+              setState({ status: "success", txHash: hash, error: null, realizedOut: realized ?? displayed.amountOut, executedQuote: displayed });
+              return;
+            }
+            setState({ status: "failed", txHash: hash, error: "Swap reverted on-chain. Open the transaction on ArcScan for the reason.", realizedOut: null, executedQuote: displayed });
+          } catch {
+            setState({ status: "failed", txHash: hash, error: readableError(e), realizedOut: null, executedQuote: displayed });
+          }
+          return;
+        }
+        setState({ status: "failed", txHash: null, error: readableError(e), realizedOut: null, executedQuote: displayed });
       }
     },
     [client, address, sendTransactionAsync],

@@ -5,6 +5,7 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt, useWatchCon
 import { readContract } from "wagmi/actions";
 import { usePrivy } from "@privy-io/react-auth";
 import Papa from "papaparse";
+import { useWallet } from "../../../lib/wallet/WalletContext";
 import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, explorerLink } from "../../../lib/arc";
 import { fetchBatchHistory, type BatchRecord } from "../../../lib/blockchain";
 import { wagmiConfig } from "../../providers";
@@ -30,6 +31,18 @@ function FieldError({ msg }: { msg: string }) {
 export default function BatchPage() {
   const { address }  = useAccount();
   const { authenticated } = usePrivy();
+  // Batch settlement's execution still goes through wagmi directly
+  // (useWriteContract below) — a pre-existing, tested financial flow this
+  // close-out pass deliberately did NOT rewrite (see
+  // lib/wallet/WalletContext.tsx's top-of-file note). `authenticated`
+  // above is the correct, accurate gate for "can this button actually
+  // execute" — it is Privy's own state, and Privy IS the wagmi connector
+  // this page signs through. `source` is read separately, only to tell a
+  // Circle-connected user the truth (this feature doesn't support their
+  // wallet type yet) instead of either silently mis-enabling the button or
+  // showing the generic "connect wallet" message they'd correctly read as
+  // wrong, since they ARE connected.
+  const { source: walletSource } = useWallet();
   const addrVal = useRef(""); const amtVal = useRef("");
   const addrDom = useRef<HTMLInputElement>(null); const amtDom = useRef<HTMLInputElement>(null);
 
@@ -233,7 +246,12 @@ export default function BatchPage() {
                   <TxBanner hash={txHash} loading={confirming} explorerUrl={explorerLink("tx",txHash)} />
                 ) : (
                   <>
-                    {!authenticated && <div className="banner warn" style={{ marginBottom:10 }}>Connect wallet to settle</div>}
+                    {!authenticated && walletSource === "circle" && (
+                      <div className="banner warn" style={{ marginBottom:10 }}>
+                        Batch settlement needs a Privy-connected wallet for now — your Circle (email) wallet isn&apos;t supported here yet.
+                      </div>
+                    )}
+                    {!authenticated && walletSource !== "circle" && <div className="banner warn" style={{ marginBottom:10 }}>Connect wallet to settle</div>}
                     {formErr && <div className="banner err" style={{ marginBottom:10 }}>{formErr}</div>}
                     <button className="btn btn-primary btn-full" style={{ padding:"12px", fontSize:14 }} onClick={()=>setConfirm(true)} disabled={!authenticated||busy||valid.length===0}>
                       {busy?"Processing…":valid.length>0?`Settle ${valid.length} payment${valid.length!==1?"s":""}`:"Add recipients to continue"}

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useWatchContractEvent } from "wagmi";
 import { usePrivy } from "@privy-io/react-auth";
+import { useWallet } from "../../../lib/wallet/WalletContext";
 import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, explorerLink } from "../../../lib/arc";
 import { fetchStreams, fetchReceivedStreams, type StreamRecord } from "../../../lib/blockchain";
 import { Tooltip, ConfirmModal, EmptyState, TxBanner } from "../../../components/UI";
@@ -57,6 +58,12 @@ export default function StreamsPage() {
   const { authenticated } = usePrivy();
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  // Same rationale as app/app/batch/page.tsx: execution here stays on
+  // wagmi directly (pre-existing, tested flow, deliberately not rewired in
+  // this close-out pass — see lib/wallet/WalletContext.tsx). `source` is
+  // only read to tell a Circle-connected user the truth instead of a
+  // misleading "connect wallet" prompt.
+  const { source: walletSource } = useWallet();
 
   const [tab, setTab]               = useState<"create"|"history"|"received">("create");
   const [streams, setStreams]        = useState<StreamRecord[]>([]);
@@ -235,7 +242,10 @@ export default function StreamsPage() {
                 </div>
                 <VestingPreview amount={previewAmount} startDate={previewStart} endDate={previewEnd} />
                 {createErr && <FieldError msg={createErr} />}
-                {!authenticated && <div className="banner warn">Connect wallet to create a stream</div>}
+                {!authenticated && walletSource === "circle" && (
+                  <div className="banner warn">Payment streams need a Privy-connected wallet for now — your Circle (email) wallet isn&apos;t supported here yet.</div>
+                )}
+                {!authenticated && walletSource !== "circle" && <div className="banner warn">Connect wallet to create a stream</div>}
                 {cTx ? <TxBanner hash={cTx} loading={cConf} explorerUrl={explorerLink("tx",cTx)} /> : (
                   <button className="btn btn-primary btn-full" onClick={handleCreateClick} disabled={!authenticated||busy}>{busy?"Creating…":"Create Stream"}</button>
                 )}

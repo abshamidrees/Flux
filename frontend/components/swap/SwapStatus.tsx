@@ -124,6 +124,12 @@ export function SwapStatus({
         <span className="swap-status-icon err"><IconAlert size={22} /></span>
         <div className="swap-status-title">Swap failed</div>
         <div className="swap-status-sub">{error ?? "Something went wrong. Please try again."}</div>
+        {/* If a hash exists here, the transaction WAS broadcast — the
+            failure happened after that (e.g. a rate-limited receipt poll),
+            not in the send. Always show it: it's the user's proof the
+            attempt reached the chain, and what they'd check on ArcScan
+            before assuming "Try again" is safe. */}
+        {txHash && <div style={{ marginTop: 12 }}><ArcScanLink hash={txHash} /></div>}
         <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "center" }}>
           <button className="btn btn-primary btn-sm" onClick={onSwapAgain}>Try again</button>
         </div>

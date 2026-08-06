@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { usePrivy } from "@privy-io/react-auth";
+import { useWallet } from "../../lib/wallet/WalletContext";
 import type { RouteId } from "../../lib/swap/types";
 import { USDC, EURC, isSameToken, type TokenInfo } from "../../lib/swap/tokens";
 import { ERC20_ABI } from "../../lib/swap/abis";
@@ -44,6 +45,13 @@ export function SwapForm({
 }) {
   const { address } = useAccount();
   const { authenticated, login } = usePrivy();
+  // Swap execution stays on wagmi/Privy directly (pre-existing, tested —
+  // see lib/wallet/WalletContext.tsx's top-of-file note on why this
+  // close-out pass didn't rewrite it). `source` is read only so a
+  // Circle-connected user gets an honest label instead of a plain
+  // "Connect wallet" that would incorrectly suggest they aren't connected
+  // at all.
+  const { source: walletSource } = useWallet();
   const { balanceOf } = useTokenBalances();
   const { priceOf } = useTokenPrices();
 
@@ -214,7 +222,8 @@ export function SwapForm({
   let btnDisabled = false;
   let btnAction: () => void = doSwap;
 
-  if (!authenticated) { btnLabel = "Connect wallet"; btnAction = login; }
+  if (!authenticated && walletSource === "circle") { btnLabel = "Swap needs a Privy wallet — connect one"; btnAction = login; }
+  else if (!authenticated) { btnLabel = "Connect wallet"; btnAction = login; }
   else if (enabledRoutes.size === 0) { btnLabel = "Enable a route in settings"; btnDisabled = true; }
   else if (amountIn === 0n) { btnLabel = "Enter an amount"; btnDisabled = true; }
   else if (insufficient) { btnLabel = `Insufficient ${sell.symbol} balance`; btnDisabled = true; }
