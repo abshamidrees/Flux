@@ -5,6 +5,7 @@
 
 const ARCSCAN = "https://testnet.arcscan.app/api";
 const FLUX    = (process.env.NEXT_PUBLIC_FLUX_ADDRESS || "") as string;
+const FLUX_AGENT_REGISTRY = (process.env.NEXT_PUBLIC_FLUX_AGENT_REGISTRY_ADDRESS || "") as string;
 
 // Keccak256 topic hashes (precomputed)
 const TOPIC = {
@@ -14,6 +15,22 @@ const TOPIC = {
   StreamWithdrawn:    "0xb8794a93ad70d58bd94788f8523cd8ebcff47f5541f8816ade60c636f1b57827",
   AgentRegistered:    "0x023c5efe572c42192271951adb0e77f97d7fc84bc761d026189ac08617346824",
   AgentPayment:       "0x7ab1062c7eaf9411dc76e1a6f5502f8b00b0c19da0277147bb9f4070d75755e5",
+} as const;
+
+// FluxAgentRegistry (Phase H3) event topics — computed via
+// keccak256(toHex("EventName(type,type,...)")) against the real contract
+// ABI, not hand-transcribed. Distinct from FLuxSettlement's own (differently
+// shaped) AgentRegistered/AgentPayment events above — same event names,
+// different contracts, different signatures, different topic0 hashes.
+const REGISTRY_TOPIC = {
+  AgentRegistered:       "0x01d632321f06a9f7bd0c4656af37870504ba6f91baca523986e932ff08d17881",
+  CapsUpdated:           "0x7ecda6a3349e60994b84106c9fa5d732011ca844e035ff52642190b0c748b21f",
+  AgentPaused:           "0x5561eb580af870fbf8b9a0506a6ebe92e64c9182edba8560cac1bab55b908a94",
+  AgentResumed:          "0x62637348b7e22ec324516e93125a967308efd1559b84d505bf18e582255b2053",
+  AgentRevoked:          "0xfff7a38bd0a2d198492b996b82c6bd083b224b0f43294f8a62fa6085f4d24ba4",
+  RecipientListUpdated:  "0xfa8f2f5e794bcb3c8049bf70f02c03aeebb1910a4e7c0dffc99d6fb5f803718f",
+  AllowlistModeSet:      "0x3555b6d98fd770d33564c66dc93a6a6a858762c5a8c063aad353295b431632bf",
+  AgentPayment:          "0x934dc4ea117b9006fee63b6f5c9c57253b2fd83b0a6a09d6a0311209e1162a15",
 } as const;
 
 function padAddress(addr: string): string {
@@ -44,6 +61,29 @@ async function fetchLogs(params: Record<string, string>): Promise<ArcLog[]> {
   if (!res.ok) throw new Error(`ArcScan HTTP ${res.status}`);
   const json = await res.json();
   // Treat any "no results" variant as empty — not an error
+  if (json.status === "0") {
+    const msg = (json.message || "").toLowerCase();
+    if (NO_RESULTS.some(n => msg.includes(n))) return [];
+    throw new Error(json.message || "ArcScan API error");
+  }
+  return (json.result as ArcLog[]) || [];
+}
+
+// Same shape as fetchLogs, targeting FluxAgentRegistry's address instead of
+// FluxSettlement's — a separate contract (Phase H3), so it needs its own
+// query target even though the ArcScan call shape is identical.
+async function fetchRegistryLogs(params: Record<string, string>): Promise<ArcLog[]> {
+  const url = new URL(ARCSCAN);
+  url.searchParams.set("module", "logs");
+  url.searchParams.set("action", "getLogs");
+  url.searchParams.set("address", FLUX_AGENT_REGISTRY);
+  url.searchParams.set("fromBlock", "0");
+  url.searchParams.set("toBlock", "latest");
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`ArcScan HTTP ${res.status}`);
+  const json = await res.json();
   if (json.status === "0") {
     const msg = (json.message || "").toLowerCase();
     if (NO_RESULTS.some(n => msg.includes(n))) return [];
@@ -243,4 +283,76 @@ export async function fetchReceivedStreams(userAddress: string): Promise<StreamR
     if (da !== db) return order[da] - order[db];
     return Number(b.id) - Number(a.id);
   });
+}
+
+// ── Agent Registry (Phase H3/H5) ────────────────────────────
+export interface RegistryAgentSummary {
+  agentId: bigint;
+  owner: string;
+  agentWallet: string;
+  perTxCap: bigint;
+  dailyCap: bigint;
+  totalCap: bigint;
+  expiry: bigint;
+  txHash: string;
+}
+
+// AgentRegistered: topic0=hash, topic1=agentId, topic2=owner, topic3=agentWallet
+// (all three indexed) — owner filtering happens client-side, same limitation
+// as fetchStreams above (ArcScan only supports topic0_1_opr, not topic0_2_opr).
+// Only gives the REGISTRATION-time snapshot; current live state (status,
+// spentToday, etc.) is read fresh from getAgent() by the dashboard, not
+// reconstructed from this event.
+export async function fetchMyAgents(ownerAddress: string): Promise<RegistryAgentSummary[]> {
+  if (!FLUX_AGENT_REGISTRY) return [];
+  const paddedOwner = padAddress(ownerAddress);
+  const logs = await fetchRegistryLogs({ topic0: REGISTRY_TOPIC.AgentRegistered });
+  return logs
+    .filter(l => l.topics[2]?.toLowerCase() === paddedOwner.toLowerCase())
+    .map(l => ({
+      agentId:     BigInt(l.topics[1]),
+      owner:       "0x" + l.topics[2].slice(26),
+      agentWallet: "0x" + l.topics[3].slice(26),
+      perTxCap:    hex64(l.data, 0),
+      dailyCap:    hex64(l.data, 1),
+      totalCap:    hex64(l.data, 2),
+      expiry:      hex64(l.data, 3),
+      txHash:      l.transactionHash,
+    }))
+    .sort((a, b) => Number(b.agentId) - Number(a.agentId));
+}
+
+export interface AgentPaymentRecord {
+  agentId: bigint;
+  to: string;
+  amount: bigint;
+  spentToday: bigint;
+  spentTotal: bigint;
+  txHash: string;
+  blockNumber: bigint;
+  timestamp: bigint;
+}
+
+// AgentPayment: topic0=hash, topic1=agentId, topic2=to (indexed);
+// data = amount, spentToday, spentTotal (non-indexed). Emitted identically
+// by both recordPayment (on-chain, trustlessly enforced) and
+// recordExternalSpend (x402/Gateway, audit-only) — see FluxAgentRegistry.sol
+// — so this feed can't itself distinguish the two paths from the log alone.
+export async function fetchAgentPayments(agentIds?: bigint[]): Promise<AgentPaymentRecord[]> {
+  if (!FLUX_AGENT_REGISTRY) return [];
+  const logs = await fetchRegistryLogs({ topic0: REGISTRY_TOPIC.AgentPayment });
+  const idSet = agentIds ? new Set(agentIds.map(String)) : null;
+  return logs
+    .filter(l => !idSet || idSet.has(BigInt(l.topics[1]).toString()))
+    .map(l => ({
+      agentId:     BigInt(l.topics[1]),
+      to:          "0x" + l.topics[2].slice(26),
+      amount:      hex64(l.data, 0),
+      spentToday:  hex64(l.data, 1),
+      spentTotal:  hex64(l.data, 2),
+      txHash:      l.transactionHash,
+      blockNumber: BigInt(l.blockNumber),
+      timestamp:   BigInt(l.timeStamp),
+    }))
+    .sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber));
 }

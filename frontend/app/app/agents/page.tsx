@@ -1,336 +1,513 @@
 "use client";
+// app/app/agents/page.tsx
+// Phase H5 — the agentic Agent Registry dashboard, wired to
+// FluxAgentRegistry (Phase H3), replacing the old static list that was
+// wired to FluxSettlement's custodial agent pool. That contract/its
+// registerAgent/depositForAgents/agentPay functions still exist on-chain,
+// untouched — this is a frontend page swap for the new non-custodial
+// model, not a contract migration.
+//
+// Enforcement note shown throughout: Circle's own wallet-layer spending
+// policies are documented mainnet-only (testnet policy-set calls are
+// rejected), and Arc is testnet-only today — so FluxAgentRegistry's
+// on-chain caps ARE the real enforcement here, not a redundant layer on
+// top of Circle's. When Circle's policies reach Arc mainnet, this contract
+// keeps working the same way; Flux would align its UI to Circle's model
+// at that point, not replace the enforcement.
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from "wagmi";
-import { usePrivy } from "@privy-io/react-auth";
-import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, shortAddress, explorerLink } from "../../../lib/arc";
-import { fetchAgentActivity, type AgentActivity } from "../../../lib/blockchain";
+import { useReadContract, useWaitForTransactionReceipt } from "wagmi";
+import { useWallet } from "../../../lib/wallet/WalletContext";
+import {
+  FLUX_AGENT_REGISTRY_ABI, FLUX_AGENT_REGISTRY_ADDRESS,
+  USDC_ABI, USDC_ADDRESS,
+  parseUSDC, formatUSDC, shortAddress, explorerLink,
+} from "../../../lib/arc";
+import { fetchMyAgents, fetchAgentPayments, type RegistryAgentSummary, type AgentPaymentRecord } from "../../../lib/blockchain";
 import { Tooltip, ConfirmModal, EmptyState, Skeleton, TxBanner } from "../../../components/UI";
-import { IconAgent, IconVault, IconEmptyAgent, IconActivity } from "../../../components/icons";
+import { IconAgent, IconEmptyAgent, IconActivity } from "../../../components/icons";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
+const AGENT_STATUS = ["Active", "Paused", "Revoked"] as const;
 
 function FieldError({ msg }: { msg: string }) {
-  return <div style={{ fontSize:12, color:"#fca5a5", fontWeight:600, marginTop:6, display:"flex", alignItems:"center", gap:5 }}>⚠ {msg}</div>;
+  return <div style={{ fontSize: 12, color: "#fca5a5", fontWeight: 600, marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>⚠ {msg}</div>;
 }
 
-function SpendBar({ spent, cap }: { spent: bigint; cap: bigint }) {
-  const pct   = cap > 0n ? Math.min(100, Number((spent * 100n) / cap)) : 0;
+function CapMeter({ label, spent, cap }: { label: string; spent: bigint; cap: bigint }) {
+  const pct = cap > 0n ? Math.min(100, Number((spent * 100n) / cap)) : 0;
   const color = pct > 85 ? "var(--red)" : pct > 60 ? "var(--amber)" : "var(--teal)";
   return (
     <div>
-      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-        <span style={{ fontFamily:"'Manrope',sans-serif", fontSize:12, color:"var(--tx2)", fontWeight:600 }}>${formatUSDC(spent)} spent</span>
-        <span style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--tx3)" }}>${formatUSDC(cap)} cap</span>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+        <span style={{ fontFamily: "'Manrope',sans-serif", fontSize: 11, color: "var(--tx2)", fontWeight: 600 }}>{label}</span>
+        <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: "var(--tx3)" }}>${formatUSDC(spent)} / ${formatUSDC(cap)}</span>
       </div>
-      <div className="prog-track"><div className="prog-fill" style={{ width:`${pct}%`, background:color }} /></div>
-      <div style={{ fontSize:11, color:"var(--tx3)", marginTop:4, fontWeight:500 }}>{pct.toFixed(0)}% of budget used</div>
+      <div className="prog-track"><div className="prog-fill" style={{ width: `${pct}%`, background: color }} /></div>
     </div>
   );
 }
 
-function AgentCard({ addr, selected, onClick }: { addr: string; selected: boolean; onClick: () => void }) {
-  const { data: info, isLoading } = useReadContract({
-    address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "getAgent",
-    args: [addr as `0x${string}`], query: { enabled: !!FLUX_ADDRESS },
-  });
-  return (
-    <div className="card" style={{ cursor:"pointer", border: selected ? "1px solid var(--teal)" : "1px solid var(--bdr)", transition:"all 0.18s" }}
-      onClick={onClick}
-      onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.borderColor="var(--bdr2)"; }}
-      onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLDivElement).style.borderColor="var(--bdr)"; }}
-    >
-      <div className="card-p">
-        <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:12 }}>
-          <div style={{ width:36, height:36, borderRadius:9, background:"var(--bg3)", border:"1px solid var(--bdr)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--tx3)", flexShrink:0 }}>
-            <IconAgent size={18} />
-          </div>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
-              <div style={{ fontFamily:"'Manrope',sans-serif", fontWeight:800, fontSize:14, color:"var(--tx)", marginBottom:2 }}>
-                {isLoading ? <Skeleton h={14} w={90} /> : ((info as any)?.label || "Unnamed Agent")}
-              </div>
-              {!isLoading && info && (
-                <span className={`chip ${(info as any).active ? "chip-up" : "chip-down"}`} style={{ fontSize:10, flexShrink:0 }}>
-                  {(info as any).active ? "● Active" : "● Inactive"}
-                </span>
-              )}
-            </div>
-            <div style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--tx3)" }}>{shortAddress(addr)}</div>
-          </div>
-        </div>
-        {isLoading ? <Skeleton h={8} w="100%" /> : info && <SpendBar spent={(info as any).spent} cap={(info as any).budgetCap} />}
-        <a href={explorerLink("address", addr)} target="_blank" rel="noopener noreferrer"
-          style={{ fontFamily:"'Manrope',sans-serif", fontSize:12, fontWeight:600, color:"var(--teal)", display:"inline-flex", alignItems:"center", gap:4, marginTop:10 }}>ArcScan ↗</a>
-      </div>
-    </div>
-  );
-}
-
-export default function AgentsPage() {
-  const { authenticated } = usePrivy();
-  const { address } = useAccount();
-  const { writeContractAsync } = useWriteContract();
-  const [tab, setTab] = useState<"registry"|"activity">("registry");
-
-  // Register form
-  const agAddrVal = useRef(""); const agLabelVal = useRef(""); const budgetVal = useRef("");
-  const agAddrDom = useRef<HTMLInputElement>(null); const agLabelDom = useRef<HTMLInputElement>(null); const budgetDom = useRef<HTMLInputElement>(null);
-  const [rErr, setRErr] = useState(""); const [rBusy, setRBusy] = useState(false);
-  const [rTx, setRTx]   = useState<`0x${string}`|undefined>();
-  const [rConfirm, setRConfirm] = useState(false);
-  const [rSnap, setRSnap] = useState({ addr:"", label:"", budget:"" });
-
-  // Deposit form
-  const depVal = useRef(""); const depDom = useRef<HTMLInputElement>(null);
-  const [dErr, setDErr] = useState(""); const [dBusy, setDBusy] = useState(false);
-  const [dTx, setDTx]   = useState<`0x${string}`|undefined>();
-  const [dConfirm, setDConfirm] = useState(false); const [dSnap, setDSnap] = useState("");
-
-  const [selectedAgent, setSelectedAgent] = useState<string|null>(null);
-  const [activity, setActivity]           = useState<AgentActivity[]>([]);
-  const [actLoading, setActLoading]       = useState(false);
-  const [actError, setActError]           = useState("");
-
-  const { isLoading: rConf } = useWaitForTransactionReceipt({ hash: rTx });
-  const { isLoading: dConf } = useWaitForTransactionReceipt({ hash: dTx });
-
-  // Contract reads
-  const { data: contractOwner } = useReadContract({
-    address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "owner",
-    query: { enabled: !!FLUX_ADDRESS },
-  });
-  const isOwner = !!address && !!contractOwner &&
-    address.toLowerCase() === (contractOwner as string).toLowerCase();
-
-  const { data: allAgents, isLoading: agentsLoading } = useReadContract({
-    address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "getAllAgents",
-    query: { enabled: !!FLUX_ADDRESS },
-  });
-
-  // ── Fetch agent activity from blockchain ──────────────────
-  const loadActivity = useCallback(async () => {
-    if (!FLUX_ADDRESS) return;
-    setActLoading(true); setActError("");
-    try {
-      const data = await fetchAgentActivity();
-      setActivity(data);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setActError(`Could not load activity: ${msg.slice(0,100)}`);
-    } finally { setActLoading(false); }
+function ExpiryCountdown({ expiry }: { expiry: bigint }) {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 30_000);
+    return () => clearInterval(t);
   }, []);
+  if (expiry === 0n) return <span style={{ fontSize: 11, color: "var(--tx3)", fontWeight: 500 }}>No expiry</span>;
+  const secs = Number(expiry) - now;
+  if (secs <= 0) return <span style={{ fontSize: 11, color: "var(--red)", fontWeight: 700 }}>Expired</span>;
+  const days = Math.floor(secs / 86400);
+  const hours = Math.floor((secs % 86400) / 3600);
+  const text = days > 0 ? `${days}d ${hours}h left` : hours > 0 ? `${hours}h left` : `${Math.floor(secs / 60)}m left`;
+  return <span style={{ fontSize: 11, color: secs < 3600 ? "var(--amber)" : "var(--tx3)", fontWeight: 600 }}>{text}</span>;
+}
 
-  useEffect(() => { loadActivity(); }, [loadActivity]);
+/* ─── Policy editor (caps, allow/blocklist, allowlist mode) ─────────── */
+function PolicyEditor({ agentId, agent, onDone }: { agentId: bigint; agent: any; onDone: () => void }) {
+  // Migrated to the unified wallet context (close-out pass): this page is
+  // owner-action-only (a human signing to manage their own agent's policy,
+  // never the agent itself), so every write here works identically whether
+  // the owner connected via Privy or Circle — writeContract() dispatches to
+  // the right signing path either way. See lib/wallet/WalletContext.tsx's
+  // top-of-file note for why swap/batch/streams were NOT migrated the same
+  // way in this pass.
+  const { writeContract } = useWallet();
+  const perTx = useRef(formatUSDC(agent.perTxCap));
+  const daily = useRef(formatUSDC(agent.dailyCap));
+  const total = useRef(formatUSDC(agent.totalCap));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [listAddr, setListAddr] = useState("");
 
-  // ── Register ──────────────────────────────────────────────
-  const handleRegisterClick = () => {
-    setRErr("");
-    if (!isOwner) { setRErr("Connect the contract deployer wallet to register agents."); return; }
-    const addr = agAddrVal.current.trim(), label = agLabelVal.current.trim(), budget = budgetVal.current.trim();
-    if (!addr)  { setRErr("Agent wallet address is required"); agAddrDom.current?.focus(); return; }
-    if (!ADDR.test(addr)) { setRErr("Invalid address — 0x + 40 hex characters"); agAddrDom.current?.focus(); return; }
-    if (!label) { setRErr("Label is required"); agLabelDom.current?.focus(); return; }
-    if (!budget || parseFloat(budget) <= 0) { setRErr("Enter a budget cap greater than 0"); budgetDom.current?.focus(); return; }
-    setRSnap({ addr, label, budget }); setRConfirm(true);
-  };
-
-  const doRegister = async () => {
-    setRConfirm(false); setRBusy(true);
+  const submitCaps = async () => {
+    setErr(""); setBusy(true);
     try {
-      const tx = await writeContractAsync({
-        address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI,
-        functionName: "registerAgent",
-        args: [rSnap.addr as `0x${string}`, rSnap.label, parseUSDC(rSnap.budget)],
-        gas: 200_000n,
+      const p = parseUSDC(perTx.current), d = parseUSDC(daily.current), t = parseUSDC(total.current);
+      if (p <= 0n || d <= 0n || t <= 0n) throw new Error("All caps must be greater than 0");
+      if (p > d) throw new Error("Per-tx cap can't exceed daily cap");
+      if (d > t) throw new Error("Daily cap can't exceed total cap");
+      await writeContract({
+        address: FLUX_AGENT_REGISTRY_ADDRESS, abi: FLUX_AGENT_REGISTRY_ABI,
+        functionName: "updateCaps", args: [agentId, p, d, t, agent.expiry],
       });
-      setRTx(tx);
-      agAddrVal.current=""; agLabelVal.current=""; budgetVal.current="";
-      if (agAddrDom.current) agAddrDom.current.value="";
-      if (agLabelDom.current) agLabelDom.current.value="";
-      if (budgetDom.current) budgetDom.current.value="";
-      setTimeout(() => loadActivity(), 3000);
+      onDone();
     } catch (e: unknown) {
-      const msg = (e as {shortMessage?:string}).shortMessage || "Transaction failed";
-      setRErr(msg.includes("owner") ? "Only the contract deployer wallet can register agents." : msg.slice(0,160));
-    } finally { setRBusy(false); }
+      setErr((e as { shortMessage?: string; message?: string }).shortMessage || (e as Error).message || "Update failed");
+    } finally { setBusy(false); }
   };
 
-  // ── Deposit ───────────────────────────────────────────────
-  const handleDepositClick = () => {
-    setDErr("");
-    if (!isOwner) { setDErr("Connect the contract deployer wallet to fund the treasury."); return; }
-    const amt = depVal.current.trim();
-    if (!amt || parseFloat(amt) <= 0) { setDErr("Enter a deposit amount greater than 0"); depDom.current?.focus(); return; }
-    setDSnap(amt); setDConfirm(true);
-  };
-
-  const doDeposit = async () => {
-    setDConfirm(false); setDBusy(true);
-    if (!FLUX_ADDRESS || !USDC_ADDRESS) { setDErr("Contracts not deployed"); setDBusy(false); return; }
+  const toggleAllowlistMode = async () => {
+    setBusy(true);
     try {
-      const a = parseUSDC(dSnap);
-      await writeContractAsync({ address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName:"approve", args:[FLUX_ADDRESS as `0x${string}`, a] });
-      const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName:"depositForAgents", args:[a], gas:300_000n });
-      setDTx(tx);
-      depVal.current=""; if (depDom.current) depDom.current.value="";
-    } catch (e: unknown) {
-      const msg = (e as {shortMessage?:string}).shortMessage || "Transaction failed";
-      setDErr(msg.includes("owner") ? "Only the contract deployer wallet can fund the treasury." : msg.slice(0,140));
-    } finally { setDBusy(false); }
+      await writeContract({
+        address: FLUX_AGENT_REGISTRY_ADDRESS, abi: FLUX_AGENT_REGISTRY_ABI,
+        functionName: "setRestrictToAllowlist", args: [agentId, !agent.restrictToAllowlist],
+      });
+      onDone();
+    } catch { /* surfaced via banner elsewhere */ } finally { setBusy(false); }
   };
 
-  const myActivity = activity.filter(a => !selectedAgent || a.agent.toLowerCase()===selectedAgent.toLowerCase());
+  const addToList = async (mode: "allow" | "block") => {
+    if (!ADDR.test(listAddr.trim())) { setErr("Enter a valid 0x address"); return; }
+    setBusy(true); setErr("");
+    try {
+      await writeContract({
+        address: FLUX_AGENT_REGISTRY_ADDRESS, abi: FLUX_AGENT_REGISTRY_ABI,
+        functionName: mode === "allow" ? "setAllowlisted" : "setBlocklisted",
+        args: [agentId, [listAddr.trim() as `0x${string}`], true],
+      });
+      setListAddr("");
+      onDone();
+    } catch (e: unknown) {
+      setErr((e as { shortMessage?: string }).shortMessage || "Failed");
+    } finally { setBusy(false); }
+  };
 
   return (
-    <div className="page-pad">
-      {rConfirm && <ConfirmModal title="Register Agent"
-        message={<div><p style={{ marginBottom:12 }}>Register this AI agent wallet:</p><div style={{ background:"var(--bg3)", borderRadius:9, padding:"14px 16px", fontFamily:"'IBM Plex Mono',monospace", fontSize:12 }}><div style={{ marginBottom:5, wordBreak:"break-all" }}><span style={{ color:"var(--tx3)" }}>Address: </span>{rSnap.addr}</div><div style={{ marginBottom:5 }}><span style={{ color:"var(--tx3)" }}>Label: </span>{rSnap.label}</div><div><span style={{ color:"var(--tx3)" }}>Budget cap: </span><span style={{ color:"var(--teal)", fontWeight:700 }}>${parseFloat(rSnap.budget).toFixed(2)} USDC</span></div></div></div>}
-        confirmLabel="Register Agent" onConfirm={doRegister} onCancel={()=>setRConfirm(false)} />}
-      {dConfirm && <ConfirmModal title="Fund Agent Treasury"
-        message={<p>Deposit <strong>${parseFloat(dSnap).toFixed(2)} USDC</strong> into the contract treasury. Registered agents draw from this pool for autonomous payments.</p>}
-        confirmLabel="Deposit" onConfirm={doDeposit} onCancel={()=>setDConfirm(false)} />}
-
-      <div style={{ marginBottom:22 }}>
-        <h1 style={{ fontFamily:"'Manrope',sans-serif", fontSize:22, fontWeight:800, color:"var(--tx)", letterSpacing:"-0.03em", marginBottom:3 }}>Agent Registry</h1>
-        <p style={{ fontSize:13, color:"var(--tx3)", fontWeight:500 }}>
-          Register AI wallets with USDC spending caps for autonomous onchain commerce.{" "}
-          <Tooltip text="An agent calls agentPay() autonomously up to its budget cap. Contract blocks any payment exceeding the cap.">What is an agent?</Tooltip>
-        </p>
+    <div style={{ borderTop: "1px solid var(--bdr)", marginTop: 14, paddingTop: 14 }}>
+      <div className="lbl" style={{ marginBottom: 10 }}>
+        <Tooltip text="Reminder: these caps are trustlessly enforced for direct on-chain payments (recordPayment — this contract moves the funds, so the cap physically can't be exceeded), but only as strong as the agent's own integration code for x402/Gateway payments (recordExternalSpend — Circle's Gateway moves those funds directly).">
+          Policy editor
+        </Tooltip>
       </div>
 
-      {/* Subtle owner notice */}
-      {authenticated && !isOwner && (
-        <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", background:"rgba(234,179,8,0.05)", border:"1px solid rgba(234,179,8,0.14)", borderRadius:8, fontSize:12, color:"rgba(234,179,8,0.6)", fontWeight:500, marginBottom:16 }}>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink:0 }}><circle cx="6" cy="6" r="5.25" stroke="currentColor" strokeWidth="1.4"/><rect x="5.35" y="5" width="1.3" height="3.5" rx="0.65" fill="currentColor"/><circle cx="6" cy="3.2" r="0.7" fill="currentColor"/></svg>
-          Owner wallet required — use the contract deployer wallet to register agents or fund treasury.
-        </div>
-      )}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+        <div><label className="lbl" style={{ fontSize: 10 }}>Per-tx</label><input className="inp" defaultValue={perTx.current} onChange={e => perTx.current = e.target.value} /></div>
+        <div><label className="lbl" style={{ fontSize: 10 }}>Daily</label><input className="inp" defaultValue={daily.current} onChange={e => daily.current = e.target.value} /></div>
+        <div><label className="lbl" style={{ fontSize: 10 }}>Total</label><input className="inp" defaultValue={total.current} onChange={e => total.current = e.target.value} /></div>
+      </div>
+      {err && <FieldError msg={err} />}
+      <button className="btn btn-secondary btn-sm" onClick={submitCaps} disabled={busy} style={{ marginBottom: 14 }}>{busy ? "Saving…" : "Save caps"}</button>
 
-      <div className="tabs" style={{ maxWidth:260, marginBottom:22 }}>
-        <button className={`tab ${tab==="registry"?"active":""}`} onClick={()=>setTab("registry")}>Registry</button>
-        <button className={`tab ${tab==="activity"?"active":""}`} onClick={()=>setTab("activity")} style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-          <span>Activity</span>
-          {activity.length>0 && <span style={{ background:"var(--teal)", color:"var(--bg)", fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:999, fontFamily:"'IBM Plex Mono',monospace", flexShrink:0, lineHeight:"18px" }}>{activity.length}</span>}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <Tooltip text="Circle's own policy model is per-tx/daily/weekly/monthly caps only — allowlist/blocklist and restrict-mode are Flux extensions beyond that vocabulary, not a mirror of it.">
+          <span className="lbl" style={{ marginBottom: 0 }}>Restrict to allowlist</span>
+        </Tooltip>
+        <button className={`btn btn-sm ${agent.restrictToAllowlist ? "btn-primary" : "btn-ghost"}`} onClick={toggleAllowlistMode} disabled={busy}>
+          {agent.restrictToAllowlist ? "On" : "Off"}
         </button>
       </div>
 
-      {tab==="registry" ? (
-        <div className="form-grid-2">
-          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input className="inp" placeholder="0x… recipient" value={listAddr} onChange={e => setListAddr(e.target.value)} style={{ flex: 1 }} />
+        <button className="btn btn-secondary btn-sm" onClick={() => addToList("allow")} disabled={busy}>Allow</button>
+        <button className="btn btn-danger btn-sm" onClick={() => addToList("block")} disabled={busy}>Block</button>
+      </div>
+    </div>
+  );
+}
 
-            {/* Register */}
-            <div className="card" style={{ opacity: !isOwner && authenticated ? 0.6 : 1 }}>
-              <div className="card-hd">
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--teal-10)", border:"1px solid var(--teal-20)", display:"flex", alignItems:"center", justifyContent:"center" }}><IconAgent size={14} /></div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--tx)" }}>Register Agent</span></div>
-                <span className="chip chip-muted" style={{ fontSize:10 }}>Owner only</span>
-              </div>
-              <div className="card-p">
-                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                  <div>
-                    <label className="lbl"><Tooltip text="The AI agent wallet that will call agentPay() autonomously.">Agent Wallet Address</Tooltip></label>
-                    <input ref={agAddrDom} className="inp" placeholder="0x..." onChange={e=>{agAddrVal.current=e.target.value;setRErr("");}} />
-                  </div>
-                  <div><label className="lbl">Label</label><input ref={agLabelDom} className="inp" placeholder="Treasury Bot v1" onChange={e=>{agLabelVal.current=e.target.value;setRErr("");}} /></div>
-                  <div>
-                    <label className="lbl"><Tooltip text="Max cumulative USDC this agent can spend. Contract blocks payments exceeding this.">USDC Budget Cap</Tooltip></label>
-                    <input ref={budgetDom} className="inp" placeholder="500.00" type="number" min="0" step="0.01" onChange={e=>{budgetVal.current=e.target.value;setRErr("");}} />
-                  </div>
-                  {rErr && <FieldError msg={rErr} />}
-                  {!authenticated && <div className="banner warn">Connect wallet to register agents</div>}
-                  {rTx ? <TxBanner hash={rTx} loading={rConf} explorerUrl={explorerLink("tx",rTx)} /> : (
-                    <button className="btn btn-primary btn-full" onClick={handleRegisterClick} disabled={!authenticated||rBusy}>{rBusy?"Registering…":"Register Agent"}</button>
-                  )}
-                </div>
-              </div>
-            </div>
+/* ─── Per-agent card ──────────────────────────────────────────────── */
+function AgentCard({ summary, connectedAddress }: { summary: RegistryAgentSummary; connectedAddress?: string }) {
+  const { agentId } = summary;
+  const { writeContract } = useWallet();
+  const [editing, setEditing] = useState(false);
+  const [revokeConfirm, setRevokeConfirm] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [actionErr, setActionErr] = useState("");
+  const [approveTx, setApproveTx] = useState<`0x${string}` | undefined>();
 
-            {/* Fund */}
-            <div className="card" style={{ opacity: !isOwner && authenticated ? 0.6 : 1 }}>
-              <div className="card-hd">
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--green-10)", border:"1px solid var(--green-20)", display:"flex", alignItems:"center", justifyContent:"center" }}><IconVault size={14} /></div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"#10b981" }}>Fund Treasury</span></div>
-                <span className="chip chip-muted" style={{ fontSize:10 }}>Owner only</span>
-              </div>
-              <div className="card-p">
-                <p style={{ fontSize:13, color:"var(--tx2)", marginBottom:12, lineHeight:1.55, fontWeight:500 }}>Deposit USDC so agents can trigger autonomous payments without manual intervention.</p>
-                <div style={{ display:"flex", gap:10, marginBottom:8 }}>
-                  <input ref={depDom} className="inp" placeholder="1000.00" type="number" min="0" step="0.01" onChange={e=>{depVal.current=e.target.value;setDErr("");}} style={{ flex:1 }} />
-                  <button className="btn btn-primary btn-sm" onClick={handleDepositClick} disabled={!authenticated||dBusy} style={{ background:"#10b981",flexShrink:0 }}>{dBusy?"…":"Deposit"}</button>
-                </div>
-                {dErr && <FieldError msg={dErr} />}
-                {dTx && <TxBanner hash={dTx} loading={dConf} explorerUrl={explorerLink("tx",dTx)} />}
-              </div>
-            </div>
+  const { data: agent, isLoading, refetch } = useReadContract({
+    address: FLUX_AGENT_REGISTRY_ADDRESS, abi: FLUX_AGENT_REGISTRY_ABI,
+    functionName: "getAgent", args: [agentId], query: { enabled: !!FLUX_AGENT_REGISTRY_ADDRESS },
+  });
 
-            {/* Flow */}
-            <div className="card">
-              <div className="card-hd"><div className="lbl" style={{ marginBottom:0 }}>Agentic commerce flow</div></div>
-              <div className="card-p">
-                {[["1. Register","Whitelist agent wallet + set budget cap"],["2. Fund","Deposit USDC into contract treasury"],["3. Act","Agent calls agentPay(recipient, amount)"],["4. Guard","Contract blocks payments > cap"],["5. Audit","Every payment logged on-chain"]].map(([t,d])=>(
-                  <div key={t} style={{ display:"flex", gap:12, marginBottom:8 }}><span style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:10, fontWeight:700, color:"var(--teal)", flexShrink:0, minWidth:68, marginTop:2 }}>{t}</span><span style={{ fontSize:12, color:"var(--tx2)", lineHeight:1.5, fontWeight:500 }}>{d}</span></div>
-                ))}
-              </div>
-            </div>
+  const { data: allowance } = useReadContract({
+    address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: "allowance",
+    args: connectedAddress ? [connectedAddress as `0x${string}`, FLUX_AGENT_REGISTRY_ADDRESS] : undefined,
+    query: { enabled: !!connectedAddress && !!USDC_ADDRESS },
+  });
+
+  const { isLoading: approveConf } = useWaitForTransactionReceipt({ hash: approveTx });
+
+  const isSelfOperated = connectedAddress && agent && connectedAddress.toLowerCase() === (agent as any).agentWallet.toLowerCase();
+  const needsApproval = isSelfOperated && (allowance as bigint | undefined) !== undefined && (allowance as bigint) === 0n;
+
+  const doAction = async (name: "pause" | "resume" | "revoke") => {
+    setBusy(name); setActionErr("");
+    try {
+      await writeContract({
+        address: FLUX_AGENT_REGISTRY_ADDRESS, abi: FLUX_AGENT_REGISTRY_ABI,
+        functionName: name, args: [agentId],
+      });
+      setRevokeConfirm(false);
+      refetch();
+    } catch (e: unknown) {
+      setActionErr((e as { shortMessage?: string }).shortMessage || "Action failed");
+    } finally { setBusy(null); }
+  };
+
+  const doApprove = async () => {
+    setBusy("approve");
+    try {
+      const { txHash } = await writeContract({
+        address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: "approve",
+        args: [FLUX_AGENT_REGISTRY_ADDRESS, 2n ** 256n - 1n],
+      });
+      setApproveTx(txHash as `0x${string}` | undefined);
+    } catch { /* ignore, banner-less: allowance re-check on refetch */ } finally { setBusy(null); }
+  };
+
+  if (isLoading || !agent) return <div className="card card-p"><Skeleton h={100} w="100%" /></div>;
+  const a = agent as any;
+  const status = AGENT_STATUS[a.status] ?? "Unknown";
+
+  return (
+    <div className="card">
+      {revokeConfirm && (
+        <ConfirmModal
+          title="Revoke agent — irreversible"
+          message={<p>This instantly and permanently halts agent #{agentId.toString()}. It can never be reactivated — you'd need to register a new agent. This is the kill-switch; there is no undo.</p>}
+          confirmLabel="Revoke permanently"
+          onConfirm={() => doAction("revoke")}
+          onCancel={() => setRevokeConfirm(false)}
+        />
+      )}
+      <div className="card-p">
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 9, background: "var(--bg3)", border: "1px solid var(--bdr)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--tx3)", flexShrink: 0 }}>
+            <IconAgent size={18} />
           </div>
-
-          {/* Agent cards */}
-          <div>
-            <div className="lbl" style={{ marginBottom:12 }}>Registered Agents {agentsLoading?"":` (${(allAgents as string[])?.length ?? 0})`}</div>
-            {agentsLoading ? (
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>{[1,2].map(i=><div key={i} className="card card-p"><Skeleton h={80} w="100%" /></div>)}</div>
-            ) : !(allAgents as string[]) || (allAgents as string[]).length===0 ? (
-              <div className="card"><EmptyState icon={<IconEmptyAgent size={28} />} title="No agents registered" desc="Register your first AI agent wallet to enable autonomous USDC payments." /></div>
-            ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {(allAgents as string[]).map(addr=>(
-                  <AgentCard key={addr} addr={addr} selected={selectedAgent===addr} onClick={()=>setSelectedAgent(selectedAgent===addr?null:addr)} />
-                ))}
-              </div>
-            )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 14, color: "var(--tx)" }}>Agent #{agentId.toString()}</div>
+              <span className={`chip ${status === "Active" ? "chip-up" : status === "Paused" ? "chip-muted" : "chip-down"}`} style={{ fontSize: 10, flexShrink: 0 }}>● {status}</span>
+            </div>
+            <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: "var(--tx3)" }}>{shortAddress(a.agentWallet)}</div>
           </div>
         </div>
-      ) : (
-        <div>
-          <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
-            <button className={`btn btn-sm ${!selectedAgent?"btn-primary":"btn-ghost"}`} onClick={()=>setSelectedAgent(null)}>All agents</button>
-            {(allAgents as string[])?.map(addr=>(
-              <button key={addr} className={`btn btn-sm ${selectedAgent===addr?"btn-primary":"btn-ghost"}`} onClick={()=>setSelectedAgent(selectedAgent===addr?null:addr)}>{shortAddress(addr)}</button>
-            ))}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
+          <CapMeter label="Today" spent={a.spentToday} cap={a.dailyCap} />
+          <CapMeter label="Lifetime" spent={a.spentTotal} cap={a.totalCap} />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <ExpiryCountdown expiry={a.expiry} />
+          <a href={explorerLink("address", a.agentWallet)} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "'Manrope',sans-serif", fontSize: 11, fontWeight: 600, color: "var(--teal)" }}>ArcScan ↗</a>
+        </div>
+
+        {needsApproval && (
+          <div className="banner warn" style={{ marginBottom: 10, fontSize: 12 }}>
+            This wallet is the agent — approve USDC spending to let it pay via recordPayment.
+            <button className="btn btn-primary btn-sm" onClick={doApprove} disabled={busy === "approve"} style={{ marginTop: 8, width: "100%" }}>
+              {busy === "approve" || approveConf ? "Approving…" : "Approve FluxAgentRegistry"}
+            </button>
           </div>
-          <div className="card" style={{ overflow:"hidden" }}>
-            <div className="card-hd">
-              <div className="lbl" style={{ marginBottom:0 }}>Agent Activity</div>
-              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                <span style={{ fontSize:12, color:"var(--tx3)", fontWeight:500 }}>Live from blockchain</span>
-                <button className="btn btn-ghost btn-sm" onClick={loadActivity} disabled={actLoading} style={{ fontSize:11, padding:"2px 8px" }}>{actLoading?"Loading…":"↻ Refresh"}</button>
+        )}
+
+        {actionErr && <FieldError msg={actionErr} />}
+
+        <div style={{ display: "flex", gap: 8 }}>
+          {status === "Active" && <button className="btn btn-secondary btn-sm" onClick={() => doAction("pause")} disabled={!!busy} style={{ flex: 1 }}>{busy === "pause" ? "…" : "Pause"}</button>}
+          {status === "Paused" && <button className="btn btn-secondary btn-sm" onClick={() => doAction("resume")} disabled={!!busy} style={{ flex: 1 }}>{busy === "resume" ? "…" : "Resume"}</button>}
+          {status !== "Revoked" && <button className="btn btn-secondary btn-sm" onClick={() => setEditing(v => !v)} style={{ flex: 1 }}>{editing ? "Close" : "Edit policy"}</button>}
+          {status !== "Revoked" && (
+            <button className="btn btn-danger btn-sm" onClick={() => setRevokeConfirm(true)} disabled={!!busy} style={{ flex: 1 }}>
+              {busy === "revoke" ? "…" : "Kill-switch"}
+            </button>
+          )}
+        </div>
+
+        {editing && status !== "Revoked" && <PolicyEditor agentId={agentId} agent={a} onDone={refetch} />}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Register form ───────────────────────────────────────────────── */
+function RegisterForm({ onRegistered }: { onRegistered: () => void }) {
+  const { isConnected, writeContract } = useWallet();
+  const walletVal = useRef(""), perTxVal = useRef(""), dailyVal = useRef(""), totalVal = useRef(""), expiryVal = useRef("");
+  const walletDom = useRef<HTMLInputElement>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [snap, setSnap] = useState({ wallet: "", perTx: "", daily: "", total: "", days: "" });
+  const [tx, setTx] = useState<`0x${string}` | undefined>();
+  const { isLoading: conf } = useWaitForTransactionReceipt({ hash: tx });
+
+  const handleClick = () => {
+    setErr("");
+    const wallet = walletVal.current.trim(), perTx = perTxVal.current.trim(), daily = dailyVal.current.trim(), total = totalVal.current.trim(), days = expiryVal.current.trim();
+    if (!ADDR.test(wallet)) { setErr("Enter a valid agent wallet address"); walletDom.current?.focus(); return; }
+    const p = parseFloat(perTx), d = parseFloat(daily), t = parseFloat(total);
+    if (!p || p <= 0) { setErr("Enter a per-tx cap greater than 0"); return; }
+    if (!d || d <= 0) { setErr("Enter a daily cap greater than 0"); return; }
+    if (!t || t <= 0) { setErr("Enter a total cap greater than 0"); return; }
+    if (p > d) { setErr("Per-tx cap can't exceed daily cap"); return; }
+    if (d > t) { setErr("Daily cap can't exceed total cap"); return; }
+    setSnap({ wallet, perTx, daily, total, days });
+    setConfirm(true);
+  };
+
+  const doRegister = async () => {
+    setConfirm(false); setBusy(true);
+    try {
+      const expiry = snap.days ? BigInt(Math.floor(Date.now() / 1000) + Number(snap.days) * 86400) : 0n;
+      const { txHash } = await writeContract({
+        address: FLUX_AGENT_REGISTRY_ADDRESS, abi: FLUX_AGENT_REGISTRY_ABI,
+        functionName: "registerAgent",
+        args: [snap.wallet as `0x${string}`, parseUSDC(snap.perTx), parseUSDC(snap.daily), parseUSDC(snap.total), expiry],
+      });
+      setTx(txHash as `0x${string}` | undefined);
+      walletVal.current = ""; perTxVal.current = ""; dailyVal.current = ""; totalVal.current = ""; expiryVal.current = "";
+      if (walletDom.current) walletDom.current.value = "";
+      setTimeout(onRegistered, 3000);
+    } catch (e: unknown) {
+      setErr((e as { shortMessage?: string }).shortMessage || "Registration failed");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="card">
+      {confirm && (
+        <ConfirmModal
+          title="Register Agent"
+          message={
+            <div>
+              <p style={{ marginBottom: 12 }}>Register this agent wallet with the following caps:</p>
+              <div style={{ background: "var(--bg3)", borderRadius: 9, padding: "14px 16px", fontFamily: "'IBM Plex Mono',monospace", fontSize: 12 }}>
+                <div style={{ marginBottom: 5, wordBreak: "break-all" }}><span style={{ color: "var(--tx3)" }}>Wallet: </span>{snap.wallet}</div>
+                <div style={{ marginBottom: 5 }}><span style={{ color: "var(--tx3)" }}>Per-tx: </span><span style={{ color: "var(--teal)", fontWeight: 700 }}>${parseFloat(snap.perTx).toFixed(2)}</span></div>
+                <div style={{ marginBottom: 5 }}><span style={{ color: "var(--tx3)" }}>Daily: </span><span style={{ color: "var(--teal)", fontWeight: 700 }}>${parseFloat(snap.daily).toFixed(2)}</span></div>
+                <div><span style={{ color: "var(--tx3)" }}>Total: </span><span style={{ color: "var(--teal)", fontWeight: 700 }}>${parseFloat(snap.total).toFixed(2)}</span></div>
               </div>
             </div>
-            {actLoading ? (
-              <div style={{ padding:"40px 24px", textAlign:"center", color:"var(--tx3)", fontSize:14 }}>Loading activity…</div>
-            ) : actError ? (
-              <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{actError}</div><button className="btn btn-ghost btn-sm" onClick={loadActivity}>Try again</button></div>
-            ) : myActivity.length===0 ? (
-              <EmptyState icon={<IconActivity size={28} />} title="No activity yet" desc="Agent registrations and payments appear here live from the blockchain." />
+          }
+          confirmLabel="Register Agent" onConfirm={doRegister} onCancel={() => setConfirm(false)}
+        />
+      )}
+      <div className="card-hd">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 24, height: 24, borderRadius: 6, background: "var(--teal-10)", border: "1px solid var(--teal-20)", display: "flex", alignItems: "center", justifyContent: "center" }}><IconAgent size={14} /></div>
+          <span style={{ fontFamily: "'Manrope',sans-serif", fontSize: 14, fontWeight: 800, color: "var(--tx)" }}>Register Agent</span>
+        </div>
+      </div>
+      <div className="card-p">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <label className="lbl"><Tooltip text="Any address that can call recordPayment — a Circle wallet (email/social) works fine here, same as it does everywhere else in Flux. x402/Gateway payments (recordExternalSpend) are different: Circle's Gateway client needs a raw exportable private key, which a Circle wallet deliberately does not have — so autonomous Gateway-paid agents need a standard EOA, not your Circle wallet. These are two separate flows; see the note below.">Agent Wallet Address</Tooltip></label>
+            <input ref={walletDom} className="inp" placeholder="0x…" onChange={e => { walletVal.current = e.target.value; setErr(""); }} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            <div><label className="lbl" style={{ fontSize: 10 }}>Per-tx cap</label><input className="inp" type="number" min="0" step="0.01" placeholder="10.00" onChange={e => perTxVal.current = e.target.value} /></div>
+            <div><label className="lbl" style={{ fontSize: 10 }}>Daily cap</label><input className="inp" type="number" min="0" step="0.01" placeholder="50.00" onChange={e => dailyVal.current = e.target.value} /></div>
+            <div><label className="lbl" style={{ fontSize: 10 }}>Total cap</label><input className="inp" type="number" min="0" step="0.01" placeholder="1000.00" onChange={e => totalVal.current = e.target.value} /></div>
+          </div>
+          {/* Not fine print — the two enforcement tiers genuinely carry
+              different guarantees, and hiding that in a tooltip would be
+              exactly the kind of silent gap this note exists to avoid. */}
+          <div style={{ background: "var(--bg3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "10px 12px", fontSize: 11.5, color: "var(--tx2)", lineHeight: 1.55 }}>
+            <strong style={{ color: "var(--tx)" }}>These caps mean different things depending on how the agent pays:</strong> direct on-chain payments (<code style={{ fontFamily: "'IBM Plex Mono',monospace" }}>recordPayment</code>) can never exceed them — this contract moves the funds itself. x402/Gateway payments (<code style={{ fontFamily: "'IBM Plex Mono',monospace" }}>recordExternalSpend</code>) are only as strong as the agent's own integration code — Circle's Gateway moves those funds directly, so the cap holds only if that code checks it first.
+          </div>
+          <div>
+            <label className="lbl"><Tooltip text="Time-bounded session — leave blank for no expiry. Circle calls this vocabulary per-tx/daily/weekly/monthly + time-bound; Flux enforces it on-chain since Circle's own policy API is mainnet-only and Arc is testnet-only.">Expires in (days, optional)</Tooltip></label>
+            <input className="inp" type="number" min="0" step="1" placeholder="No expiry" onChange={e => expiryVal.current = e.target.value} />
+          </div>
+          {err && <FieldError msg={err} />}
+          {!isConnected && <div className="banner warn">Connect wallet to register agents</div>}
+          {tx ? <TxBanner hash={tx} loading={conf} explorerUrl={explorerLink("tx", tx)} /> : (
+            <button className="btn btn-primary btn-full" onClick={handleClick} disabled={!isConnected || busy}>{busy ? "Registering…" : "Register Agent"}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Marketplace (honest empty state) ───────────────────────────── */
+function MarketplaceTab() {
+  return (
+    <div className="card">
+      <EmptyState
+        icon={<IconActivity size={28} />}
+        title="No marketplace services yet"
+        desc="No Flux-native x402 services have been published, and Circle's Agent Marketplace reachability on Arc Testnet hasn't been confirmed through a non-CLI path. Nothing fabricated here — this section goes live once either source has something real to show."
+      />
+    </div>
+  );
+}
+
+/* ─── Main page ───────────────────────────────────────────────────── */
+export default function AgentsPage() {
+  const { isConnected, address } = useWallet();
+  const [tab, setTab] = useState<"agents" | "activity" | "marketplace">("agents");
+
+  const [myAgents, setMyAgents] = useState<RegistryAgentSummary[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [agentsErr, setAgentsErr] = useState("");
+
+  const [payments, setPayments] = useState<AgentPaymentRecord[]>([]);
+  const [payLoading, setPayLoading] = useState(false);
+  const [payErr, setPayErr] = useState("");
+
+  const loadAgents = useCallback(async () => {
+    if (!address || !FLUX_AGENT_REGISTRY_ADDRESS) return;
+    setAgentsLoading(true); setAgentsErr("");
+    try {
+      setMyAgents(await fetchMyAgents(address));
+    } catch (e: unknown) {
+      setAgentsErr(`Could not load agents: ${(e instanceof Error ? e.message : String(e)).slice(0, 100)}`);
+    } finally { setAgentsLoading(false); }
+  }, [address]);
+
+  const loadPayments = useCallback(async () => {
+    if (!FLUX_AGENT_REGISTRY_ADDRESS) return;
+    setPayLoading(true); setPayErr("");
+    try {
+      const ids = myAgents.map(a => a.agentId);
+      setPayments(await fetchAgentPayments(ids.length ? ids : undefined));
+    } catch (e: unknown) {
+      setPayErr(`Could not load activity: ${(e instanceof Error ? e.message : String(e)).slice(0, 100)}`);
+    } finally { setPayLoading(false); }
+  }, [myAgents]);
+
+  useEffect(() => { loadAgents(); }, [loadAgents]);
+  useEffect(() => { if (tab === "activity") loadPayments(); }, [tab, loadPayments]);
+
+  const notDeployed = !FLUX_AGENT_REGISTRY_ADDRESS;
+
+  return (
+    <div className="page-pad">
+      <div style={{ marginBottom: 22 }}>
+        <h1 style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800, color: "var(--tx)", letterSpacing: "-0.03em", marginBottom: 3 }}>Agent Registry</h1>
+        <p style={{ fontSize: 13, color: "var(--tx3)", fontWeight: 500, maxWidth: 640 }}>
+          Policy-controlled USDC wallets for autonomous agents — discover services, pay per-call, operate inside hard guardrails.{" "}
+          <Tooltip text="Circle's own wallet-layer spending policies are documented mainnet-only — testnet policy-set calls are rejected — and Arc is testnet-only today. So FluxAgentRegistry enforces these caps on-chain itself; this isn't a redundant layer, it's the only enforcement available on Arc right now.">
+            Why on-chain enforcement?
+          </Tooltip>
+        </p>
+      </div>
+
+      {notDeployed && <div className="banner warn" style={{ marginBottom: 16 }}>FluxAgentRegistry address not configured.</div>}
+
+      <div className="tabs" style={{ maxWidth: 340, marginBottom: 22 }}>
+        <button className={`tab ${tab === "agents" ? "active" : ""}`} onClick={() => setTab("agents")}>My Agents</button>
+        <button className={`tab ${tab === "activity" ? "active" : ""}`} onClick={() => setTab("activity")}>Activity</button>
+        <button className={`tab ${tab === "marketplace" ? "active" : ""}`} onClick={() => setTab("marketplace")}>Marketplace</button>
+      </div>
+
+      {tab === "agents" && (
+        <div className="form-grid-2">
+          <RegisterForm onRegistered={loadAgents} />
+          <div>
+            <div className="lbl" style={{ marginBottom: 12 }}>Your Agents {agentsLoading ? "" : `(${myAgents.length})`}</div>
+            {!isConnected ? (
+              <div className="card"><EmptyState icon={<IconEmptyAgent size={28} />} title="Connect a wallet" desc="Connect to see and manage agents you've registered." /></div>
+            ) : agentsLoading ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{[1, 2].map(i => <div key={i} className="card card-p"><Skeleton h={100} w="100%" /></div>)}</div>
+            ) : agentsErr ? (
+              <div className="card card-p"><div className="banner err" style={{ marginBottom: 12 }}>{agentsErr}</div><button className="btn btn-ghost btn-sm" onClick={loadAgents}>Try again</button></div>
+            ) : myAgents.length === 0 ? (
+              <div className="card"><EmptyState icon={<IconEmptyAgent size={28} />} title="No agents registered" desc="Register your first policy-controlled agent wallet." /></div>
             ) : (
-              <div style={{ overflowX:"auto" }}>
-                <table className="tbl">
-                  <thead><tr><th>Event</th><th>Agent</th><th>Amount</th><th>Tx</th></tr></thead>
-                  <tbody>
-                    {myActivity.map((a,i)=>(
-                      <tr key={i}>
-                        <td><span className={`chip ${a.type==="registered"?"chip-teal":"chip-up"}`} style={{ fontSize:10 }}>{a.type==="registered"?"Registered":"Payment"}</span></td>
-                        <td><a href={explorerLink("address",a.agent)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{shortAddress(a.agent)}</a></td>
-                        <td style={{ fontFamily:"'Manrope',sans-serif", fontWeight:700, color:"var(--teal)" }}>${formatUSDC(a.amount)}</td>
-                        <td>{a.txHash&&<a href={explorerLink("tx",a.txHash)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{a.txHash.slice(0,8)}… ↗</a>}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {myAgents.map(a => <AgentCard key={a.agentId.toString()} summary={a} connectedAddress={address ?? undefined} />)}
               </div>
             )}
           </div>
         </div>
       )}
+
+      {tab === "activity" && (
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div className="card-hd">
+            <div className="lbl" style={{ marginBottom: 0 }}>Live Payment Feed</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "var(--tx3)", fontWeight: 500 }}>Reconstructed from AgentPayment events</span>
+              <button className="btn btn-ghost btn-sm" onClick={loadPayments} disabled={payLoading} style={{ fontSize: 11, padding: "2px 8px" }}>{payLoading ? "Loading…" : "↻ Refresh"}</button>
+            </div>
+          </div>
+          {payLoading ? (
+            <div style={{ padding: "40px 24px", textAlign: "center", color: "var(--tx3)", fontSize: 14 }}>Loading activity…</div>
+          ) : payErr ? (
+            <div style={{ padding: 24 }}><div className="banner err" style={{ marginBottom: 12 }}>{payErr}</div><button className="btn btn-ghost btn-sm" onClick={loadPayments}>Try again</button></div>
+          ) : payments.length === 0 ? (
+            <EmptyState icon={<IconActivity size={28} />} title="No payments yet" desc="Metered agent payments — on-chain (recordPayment) or x402/Gateway (recordExternalSpend) — appear here live, sourced from chain events." />
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table className="tbl">
+                <thead><tr><th>Agent</th><th>Recipient</th><th>Amount</th><th>Running total</th><th>Tx</th></tr></thead>
+                <tbody>
+                  {payments.map((p, i) => (
+                    <tr key={i}>
+                      <td>#{p.agentId.toString()}</td>
+                      <td><a href={explorerLink("address", p.to)} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: "var(--teal)" }}>{shortAddress(p.to)}</a></td>
+                      <td style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, color: "var(--teal)" }}>${formatUSDC(p.amount)}</td>
+                      <td style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: "var(--tx3)" }}>${formatUSDC(p.spentTotal)}</td>
+                      <td><a href={explorerLink("tx", p.txHash)} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: "var(--teal)" }}>{p.txHash.slice(0, 8)}… ↗</a></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "marketplace" && <MarketplaceTab />}
     </div>
   );
 }
