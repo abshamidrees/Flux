@@ -1,47 +1,54 @@
 "use client";
 
-import { H1, H2, P, CodeBlock, AddressLink } from "../../../components/docs/DocsUI";
+import { H1, H2, H3, P, InlineCode, CodeBlock, Callout, AddressLink } from "../../../components/docs/DocsUI";
 import { Breadcrumbs } from "../../../components/docs/Breadcrumbs";
-import { FLUX_ADDRESS } from "../../../lib/arc";
+import { FLUX_AGENT_REGISTRY_ADDRESS } from "../../../lib/arc";
 
 export default function DocsAgentsPage() {
   return (
     <div>
       <Breadcrumbs trail={[{ label: "Docs", href: "/" }, { label: "Agent Registry" }]} />
       <H1 id="agent-registry">Agent Registry</H1>
-      <P>Register AI agent wallets with USDC spending caps. Once registered, an agent calls <code>agentPay()</code> from its own wallet to send USDC autonomously — no manual approval per payment — as long as it stays within its cap.</P>
+      <P>Give an AI agent its own USDC wallet, set hard spending limits on it, and let it pay on its own. The agent keeps its own funds — Flux never holds them — and every payment is checked against your limits before it can go through.</P>
 
-      <H2 id="use-cases">Use cases</H2>
-      <P>AI trading bots that pay fees autonomously. Subscription services billed by an agent. Autonomous payroll agents. DeFi bots that need to pay for gas or services. Any AI system that needs on-chain payment authority without a human in the loop.</P>
+      <Callout tone="teal">
+        <strong>Non-custodial.</strong> An agent is any wallet you choose — a Circle wallet, MetaMask, or a plain key an autonomous script holds. Flux never takes custody of its funds; it only enforces the limits you set.
+      </Callout>
 
       <H2 id="how-it-works">How it works</H2>
-      <P>The owner registers the agent wallet with a label and USDC budget cap, then deposits USDC into the contract treasury. The agent calls <code>agentPay(recipient, amount)</code> from its own wallet; the contract checks the agent is active and within its cumulative cap before releasing funds.</P>
+      <P>Register an agent wallet with three caps: a per-transaction limit, a daily limit, and a lifetime limit. The agent wallet then approves the registry contract to move its own USDC, the same way you&apos;d approve any contract to spend a token on your behalf. After that, the agent can pay recipients directly, and the registry checks every payment against your caps before it happens.</P>
+      <P>You can update caps, pause an agent, resume it, or shut it down permanently at any time. Only you, as the wallet that registered it, can change its settings.</P>
 
-      <H2 id="owner-only-actions">Owner-only actions</H2>
-      <P>Register Agent and Fund Treasury require the contract deployer wallet — only the owner can whitelist agents or fund the treasury. Regular users can view registered agents but cannot modify them.</P>
+      <H2 id="enforcement">Two ways an agent can pay</H2>
+      <P>Caps mean different things depending on how the payment moves, and it&apos;s worth knowing the difference before you rely on them:</P>
+      <H3>On-chain payments</H3>
+      <P>The agent calls <InlineCode>recordPayment</InlineCode>. The registry itself pulls the funds from the agent&apos;s wallet and sends them. This is trustless: the cap physically cannot be exceeded, because the money can&apos;t move without passing the check first.</P>
+      <H3>Gateway / x402 payments</H3>
+      <P>For agent-to-service payments (an AI agent paying per API call, for example), Circle&apos;s Gateway moves the funds directly through its own settlement path — the registry never touches that money. The agent calls <InlineCode>recordExternalSpend</InlineCode> to log the payment against the same caps, but this only works if the agent&apos;s own code calls it before paying. Nothing on-chain forces that call to happen, so this cap is enforced by convention, not by the contract. Flux&apos;s own agent-payment code always calls it; a third-party integration would need to as well.</P>
 
-      <H2 id="agentpay-interface">agentPay interface</H2>
-      <CodeBlock label="FluxSettlement.sol">{`modifier onlyActiveAgent() {
-    require(agents[msg.sender].active, "Flux: agent not registered");
-    _;
-}
+      <H2 id="guardrails">Guardrails</H2>
+      <P>Beyond the three caps, each agent can have:</P>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: "var(--tx2)" }}><strong style={{ color: "var(--tx)" }}>An expiry.</strong> After it passes, the agent can&apos;t spend anymore. Optional — leave it unset for no expiry.</div>
+        <div style={{ fontSize: 13, color: "var(--tx2)" }}><strong style={{ color: "var(--tx)" }}>A blocklist.</strong> Addresses this agent can never pay, regardless of caps.</div>
+        <div style={{ fontSize: 13, color: "var(--tx2)" }}><strong style={{ color: "var(--tx)" }}>An allowlist.</strong> Turn on &ldquo;restrict to allowlist&rdquo; and the agent can only pay addresses you&apos;ve explicitly added.</div>
+        <div style={{ fontSize: 13, color: "var(--tx2)" }}><strong style={{ color: "var(--tx)" }}>A kill switch.</strong> Revoke shuts an agent down permanently. There&apos;s no reactivating it — register a new one if you need to.</div>
+      </div>
 
-// Called by the agent's own wallet, not the owner.
-function agentPay(address recipient, uint256 amount) external onlyActiveAgent {
-    Agent storage a = agents[msg.sender];
-    require(a.spent + amount <= a.budgetCap, "Flux: budget exceeded");
-    require(recipient != address(0), "Flux: zero recipient");
-
-    a.spent += amount;
-    // transfers amount from the contract's treasury to recipient
-}`}</CodeBlock>
-
-      <H2 id="budget-cap">Budget cap</H2>
-      <P>The budget cap is cumulative — once an agent has spent its full cap, it cannot make further payments. The owner must register a new agent or raise the cap via <code>updateAgent()</code>. This is intentional: it limits blast radius if an agent is compromised.</P>
+      <H2 id="circle-policies">Why this runs on Flux, not Circle</H2>
+      <P>Circle&apos;s own wallet-level spending policies (per-transaction, daily, weekly, and monthly caps) are documented as mainnet-only — setting a policy on a testnet chain is rejected. Arc is testnet-only today, so Circle can&apos;t enforce agent limits at the wallet level here. That&apos;s why Flux enforces caps itself, on-chain, through this registry, rather than leaning on Circle&apos;s policy API. When Circle&apos;s policies reach Arc mainnet, the registry keeps working exactly the same way.</P>
+      <P>The allowlist, blocklist, and expiry described above go beyond Circle&apos;s own policy vocabulary — they&apos;re Flux additions, not a mirror of what Circle offers.</P>
 
       <H2 id="contract">Contract</H2>
-      <P>Agents are handled by <code>FluxSettlement.registerAgent()</code>, <code>updateAgent()</code>, and <code>agentPay()</code>. Full ABI and events are in the <a href="/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page.</P>
-      <P><AddressLink address={FLUX_ADDRESS || "0x0BBBc1C77ada4d584445383B77b88DDdDAae2F6A"} label="FluxSettlement on ArcScan" /></P>
+      <P>Full function and event signatures are on the <a href="/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page.</P>
+      <CodeBlock label="Registering an agent">{`function registerAgent(
+    address agentWallet,
+    uint256 perTxCap,
+    uint256 dailyCap,
+    uint256 totalCap,
+    uint64  expiry
+) external returns (uint256 agentId)`}</CodeBlock>
+      {FLUX_AGENT_REGISTRY_ADDRESS && <P><AddressLink address={FLUX_AGENT_REGISTRY_ADDRESS} label="FluxAgentRegistry on ArcScan" /></P>}
     </div>
   );
 }

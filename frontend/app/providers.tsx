@@ -46,7 +46,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId="cmossicur025d0cl2x79izo9h"
       config={{
-        loginMethods: ["wallet", "email"],
+        // "email" deliberately excluded: Circle's own "Continue with email"
+        // lane in ConnectModal.tsx now owns email login entirely. Leaving it
+        // here would give the user two competing "enter your email" flows
+        // producing two different, unrelated wallet types (a Privy embedded
+        // wallet vs. a Circle non-custodial wallet) — Privy's own hosted
+        // modal (triggered by "Connect wallet") should only offer external
+        // browser wallets.
+        loginMethods: ["wallet"],
         appearance: {
           theme: "dark",
           accentColor: "#0f766e",

@@ -127,7 +127,7 @@ function PolicyEditor({ agentId, agent, onDone }: { agentId: bigint; agent: any;
   return (
     <div style={{ borderTop: "1px solid var(--bdr)", marginTop: 14, paddingTop: 14 }}>
       <div className="lbl" style={{ marginBottom: 10 }}>
-        <Tooltip text="Reminder: these caps are trustlessly enforced for direct on-chain payments (recordPayment — this contract moves the funds, so the cap physically can't be exceeded), but only as strong as the agent's own integration code for x402/Gateway payments (recordExternalSpend — Circle's Gateway moves those funds directly).">
+        <Tooltip text="On-chain payments can never exceed these caps. Gateway payments only respect them if the agent's code checks first.">
           Policy editor
         </Tooltip>
       </div>
@@ -141,7 +141,7 @@ function PolicyEditor({ agentId, agent, onDone }: { agentId: bigint; agent: any;
       <button className="btn btn-secondary btn-sm" onClick={submitCaps} disabled={busy} style={{ marginBottom: 14 }}>{busy ? "Saving…" : "Save caps"}</button>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <Tooltip text="Circle's own policy model is per-tx/daily/weekly/monthly caps only — allowlist/blocklist and restrict-mode are Flux extensions beyond that vocabulary, not a mirror of it.">
+        <Tooltip text="When on, this agent can only pay addresses you've allowlisted.">
           <span className="lbl" style={{ marginBottom: 0 }}>Restrict to allowlist</span>
         </Tooltip>
         <button className={`btn btn-sm ${agent.restrictToAllowlist ? "btn-primary" : "btn-ghost"}`} onClick={toggleAllowlistMode} disabled={busy}>
@@ -217,8 +217,8 @@ function AgentCard({ summary, connectedAddress }: { summary: RegistryAgentSummar
     <div className="card">
       {revokeConfirm && (
         <ConfirmModal
-          title="Revoke agent — irreversible"
-          message={<p>This instantly and permanently halts agent #{agentId.toString()}. It can never be reactivated — you'd need to register a new agent. This is the kill-switch; there is no undo.</p>}
+          title="Revoke agent"
+          message={<p>This permanently disables agent #{agentId.toString()}. It can't be reactivated. Register a new agent if you need one later.</p>}
           confirmLabel="Revoke permanently"
           onConfirm={() => doAction("revoke")}
           onCancel={() => setRevokeConfirm(false)}
@@ -250,7 +250,7 @@ function AgentCard({ summary, connectedAddress }: { summary: RegistryAgentSummar
 
         {needsApproval && (
           <div className="banner warn" style={{ marginBottom: 10, fontSize: 12 }}>
-            This wallet is the agent — approve USDC spending to let it pay via recordPayment.
+            This wallet is the agent. Approve USDC spending to let it pay.
             <button className="btn btn-primary btn-sm" onClick={doApprove} disabled={busy === "approve"} style={{ marginTop: 8, width: "100%" }}>
               {busy === "approve" || approveConf ? "Approving…" : "Approve FluxAgentRegistry"}
             </button>
@@ -348,7 +348,7 @@ function RegisterForm({ onRegistered }: { onRegistered: () => void }) {
       <div className="card-p">
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
-            <label className="lbl"><Tooltip text="Any address that can call recordPayment — a Circle wallet (email/social) works fine here, same as it does everywhere else in Flux. x402/Gateway payments (recordExternalSpend) are different: Circle's Gateway client needs a raw exportable private key, which a Circle wallet deliberately does not have — so autonomous Gateway-paid agents need a standard EOA, not your Circle wallet. These are two separate flows; see the note below.">Agent Wallet Address</Tooltip></label>
+            <label className="lbl"><Tooltip text="The wallet that will make payments. Any wallet works for on-chain payments. Gateway payments need a plain wallet, not a Circle wallet.">Agent Wallet Address</Tooltip></label>
             <input ref={walletDom} className="inp" placeholder="0x…" onChange={e => { walletVal.current = e.target.value; setErr(""); }} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
@@ -358,12 +358,14 @@ function RegisterForm({ onRegistered }: { onRegistered: () => void }) {
           </div>
           {/* Not fine print — the two enforcement tiers genuinely carry
               different guarantees, and hiding that in a tooltip would be
-              exactly the kind of silent gap this note exists to avoid. */}
+              exactly the kind of silent gap this note exists to avoid. Kept
+              short on purpose; full explanation lives in the docs. */}
           <div style={{ background: "var(--bg3)", border: "1px solid var(--bdr)", borderRadius: 8, padding: "10px 12px", fontSize: 11.5, color: "var(--tx2)", lineHeight: 1.55 }}>
-            <strong style={{ color: "var(--tx)" }}>These caps mean different things depending on how the agent pays:</strong> direct on-chain payments (<code style={{ fontFamily: "'IBM Plex Mono',monospace" }}>recordPayment</code>) can never exceed them — this contract moves the funds itself. x402/Gateway payments (<code style={{ fontFamily: "'IBM Plex Mono',monospace" }}>recordExternalSpend</code>) are only as strong as the agent's own integration code — Circle's Gateway moves those funds directly, so the cap holds only if that code checks it first.
+            <strong style={{ color: "var(--tx)" }}>Heads up:</strong> on-chain payments can never exceed these caps. Gateway payments only respect them if the agent's own code checks first.{" "}
+            <a href="/docs/agents#enforcement" style={{ color: "var(--teal-l)" }}>Learn more</a>
           </div>
           <div>
-            <label className="lbl"><Tooltip text="Time-bounded session — leave blank for no expiry. Circle calls this vocabulary per-tx/daily/weekly/monthly + time-bound; Flux enforces it on-chain since Circle's own policy API is mainnet-only and Arc is testnet-only.">Expires in (days, optional)</Tooltip></label>
+            <label className="lbl"><Tooltip text="Leave blank for no expiry. After this many days, the agent can't spend anymore.">Expires in (days, optional)</Tooltip></label>
             <input className="inp" type="number" min="0" step="1" placeholder="No expiry" onChange={e => expiryVal.current = e.target.value} />
           </div>
           {err && <FieldError msg={err} />}
@@ -384,7 +386,7 @@ function MarketplaceTab() {
       <EmptyState
         icon={<IconActivity size={28} />}
         title="No marketplace services yet"
-        desc="No Flux-native x402 services have been published, and Circle's Agent Marketplace reachability on Arc Testnet hasn't been confirmed through a non-CLI path. Nothing fabricated here — this section goes live once either source has something real to show."
+        desc="Nothing published yet. This section goes live once real services are available."
       />
     </div>
   );
@@ -432,12 +434,12 @@ export default function AgentsPage() {
   return (
     <div className="page-pad">
       <div style={{ marginBottom: 22 }}>
-        <h1 style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800, color: "var(--tx)", letterSpacing: "-0.03em", marginBottom: 3 }}>Agent Registry</h1>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <h1 style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800, color: "var(--tx)", letterSpacing: "-0.03em", marginBottom: 3 }}>Agent Registry</h1>
+          <a href="/docs/agents" style={{ fontSize: 12, fontWeight: 600, color: "var(--teal-l)" }}>Read the docs →</a>
+        </div>
         <p style={{ fontSize: 13, color: "var(--tx3)", fontWeight: 500, maxWidth: 640 }}>
-          Policy-controlled USDC wallets for autonomous agents — discover services, pay per-call, operate inside hard guardrails.{" "}
-          <Tooltip text="Circle's own wallet-layer spending policies are documented mainnet-only — testnet policy-set calls are rejected — and Arc is testnet-only today. So FluxAgentRegistry enforces these caps on-chain itself; this isn't a redundant layer, it's the only enforcement available on Arc right now.">
-            Why on-chain enforcement?
-          </Tooltip>
+          Give an AI agent its own USDC wallet with hard spending limits, then let it pay on its own.
         </p>
       </div>
 
@@ -485,7 +487,7 @@ export default function AgentsPage() {
           ) : payErr ? (
             <div style={{ padding: 24 }}><div className="banner err" style={{ marginBottom: 12 }}>{payErr}</div><button className="btn btn-ghost btn-sm" onClick={loadPayments}>Try again</button></div>
           ) : payments.length === 0 ? (
-            <EmptyState icon={<IconActivity size={28} />} title="No payments yet" desc="Metered agent payments — on-chain (recordPayment) or x402/Gateway (recordExternalSpend) — appear here live, sourced from chain events." />
+            <EmptyState icon={<IconActivity size={28} />} title="No payments yet" desc="Agent payments show up here live as they happen." />
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table className="tbl">

@@ -26,12 +26,12 @@ export default function DocsIndexPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 32 }}>
         <FeatureCard icon={<IconBatch size={18} />} title="Batch Settlement" desc="Pay up to 500 wallets in one transaction. CSV upload or manual entry." href="/batch" />
         <FeatureCard icon={<IconStream size={18} />} title="Payment Streams" desc="Linear USDC vesting for payroll, grants, and contractor agreements." href="/streams" />
-        <FeatureCard icon={<IconAgent size={18} />} title="Agent Registry" desc="Register AI wallets with USDC spending caps for autonomous commerce." href="/agents" />
+        <FeatureCard icon={<IconAgent size={18} />} title="Agent Registry" desc="Give an AI agent its own USDC wallet with hard, on-chain spending limits and a kill switch." href="/agents" />
         <FeatureCard icon={<IconSwap size={18} />} title="Swap" desc="Convert any Arc asset to USDC in-app, routed across every venue for the best price." href="/swap" />
       </div>
 
       <H2 id="how-it-works">How it works</H2>
-      <P>Batch settlement, streams, and the agent registry all live in one deployed contract, <InlineCode>FluxSettlement.sol</InlineCode>. Swap and limit orders are handled separately by third-party routers and <InlineCode>FluxLimitOrder.sol</InlineCode> — see the <a href="/swap" style={{ color: "var(--teal-l)" }}>Swap docs</a>. Wallet connection is handled by Privy (MetaMask or email login). Every transaction settles on-chain.</P>
+      <P>Batch settlement and streams live in one deployed contract, <InlineCode>FluxSettlement.sol</InlineCode>. Swap and limit orders are handled separately by third-party routers and <InlineCode>FluxLimitOrder.sol</InlineCode> — see the <a href="/swap" style={{ color: "var(--teal-l)" }}>Swap docs</a>. The Agent Registry has its own contract, <InlineCode>FluxAgentRegistry.sol</InlineCode> — see the <a href="/agents" style={{ color: "var(--teal-l)" }}>Agent Registry docs</a>. Wallet connection is either an external browser wallet (MetaMask and others, via Privy) or a non-custodial email wallet (via Circle) — every transaction settles on-chain either way.</P>
 
       <H2 id="quickstart">Quickstart</H2>
       <H3>1. Add Arc Testnet to your wallet</H3>
@@ -45,7 +45,7 @@ Explorer:       https://testnet.arcscan.app`}</CodeBlock>
       <P>Go to <strong>faucet.circle.com</strong>, select Arc Testnet, and request USDC to your wallet address — free testnet funds.</P>
 
       <H3>3. Connect and use Flux</H3>
-      <P>Visit <strong>fluxonarc.xyz</strong>, click Connect Wallet in the top-right, and choose MetaMask or email login. Once connected, your USDC balance appears in the header and every feature unlocks.</P>
+      <P>Visit <strong>fluxonarc.xyz</strong>, click Connect Wallet in the top-right, and either connect an existing wallet like MetaMask or continue with just your email. Once connected, your USDC balance appears in the header and every feature unlocks.</P>
 
       <H2 id="network-addresses">Network &amp; addresses</H2>
       <P>Every contract Flux deploys, in one place — see the full <a href="/reference" style={{ color: "var(--teal-l)" }}>Reference</a> page for ABIs and events. All addresses link to ArcScan.</P>

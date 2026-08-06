@@ -300,7 +300,7 @@ export default function Landing() {
             {[
               { title: "Batch Settlement", desc: "Send USDC to 500 wallets in a single transaction. Payroll, grants, airdrops.", tag: "v1", tc: "#0f766e" },
               { title: "Payment Streams",  desc: "Linear USDC vesting for payroll and contractor agreements. Cancel anytime.", tag: "v1", tc: "#0f766e" },
-              { title: "Agent Registry",   desc: "Register AI wallets with USDC spending caps for autonomous agent commerce.", tag: "v1", tc: "#0f766e" },
+              { title: "Agent Registry",   desc: "Give an AI agent its own USDC wallet with hard on-chain spending limits and a kill switch.", tag: "v1", tc: "#0f766e" },
               
             ].map(f => (
               <div key={f.title} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "16px 20px", display: "flex", gap: 14, cursor: "default", transition: "all 0.2s" }}
@@ -347,7 +347,7 @@ export default function Landing() {
           </div>
           <FAQItem q="What is Flux and who is it for?" a="Flux is a programmable USDC settlement layer on Arc — Circle's EVM-compatible L1 with native USDC gas. It's designed for AI agents, DAOs, enterprises, and payroll platforms that need to send USDC to many recipients cheaply and instantly. If you're moving money onchain, Flux is your settlement rail." />
           <FAQItem q="How does the 0.1% platform fee work?" a="When you call batchSettle(), Flux calculates 0.1% of the total USDC and adds it to the required approval. Settling $10,000 to 100 recipients costs a $10 platform fee. The fee accumulates in the contract and is withdrawable by the owner. Payment streams have no fee beyond minimal Arc gas." />
-          <FAQItem q="What is an AI Agent in Flux and how does it work?" a="An Agent is any wallet registered by the owner with a USDC spending cap. Once registered and funded, that wallet autonomously calls agentPay(recipient, amount) without human approval. The contract enforces the budget cap and logs every payment as an onchain event — perfect for treasury bots and autonomous systems." />
+          <FAQItem q="What is an AI Agent in Flux and how does it work?" a="An Agent is any wallet you register with per-transaction, daily, and lifetime USDC spending caps, plus an optional expiry and allow/block lists. The agent wallet approves Flux's on-chain registry to move its own funds, then pays on its own — every payment is checked against your limits first, and you can pause or permanently kill the agent at any time. Built for treasury bots, subscription payers, and any autonomous system that needs on-chain spending authority without a human in the loop." />
           <FAQItem q="How do I get test USDC to try Flux on Arc testnet?" a="Go to faucet.circle.com and request test USDC for Arc testnet (Chain ID 5042002). If Arc isn't listed on the Circle faucet, check docs.arc.network for the current URL. You only need a small amount — a few test USDC is enough to run batch settlements and streams in development." />
         </div>
       </section>

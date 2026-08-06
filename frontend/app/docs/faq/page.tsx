@@ -60,11 +60,11 @@ export default function DocsFaqPage() {
       </QA>
 
       <GroupLabel>Agent registry</GroupLabel>
-      <QA id="increase-budget-cap" q="Can I increase an agent's budget after registering it?">
-        <P>Yes — call <code>updateAgent()</code> with a new cap. The agent&apos;s cumulative spend total carries forward; raising the cap just gives it more room above what it&apos;s already spent.</P>
+      <QA id="increase-budget-cap" q="Can I change an agent's caps after registering it?">
+        <P>Yes — call <code>updateCaps()</code> with new per-transaction, daily, and total limits. Whatever the agent has already spent carries forward, so raising a cap just gives it more room above that.</P>
       </QA>
-      <QA id="compromised-agent" q="How do I revoke a compromised agent immediately?">
-        <P>Call <code>updateAgent()</code> and set it inactive. The agent&apos;s next <code>agentPay()</code> call reverts instantly — there is no delay or pending-transaction window.</P>
+      <QA id="compromised-agent" q="How do I shut down a compromised agent immediately?">
+        <P>Call <code>revoke()</code> — the kill switch. It takes effect instantly and permanently; the agent&apos;s next payment reverts, and it can never be reactivated. If you just want to pause it temporarily instead, use <code>pause()</code> and <code>resume()</code>.</P>
       </QA>
 
       <GroupLabel>Swap</GroupLabel>

@@ -97,8 +97,14 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Runs on every request except static assets, image optimisation, and the
-  // public asset folders (brand/tokens) — those must be byte-identical
-  // regardless of which host requested them, never path-rewritten.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand/|tokens/).*)"],
+  // Runs on every request except static assets, image optimisation, the
+  // public asset folders (brand/tokens), and API routes. /api/* MUST be
+  // excluded — without this, a client-side fetch("/api/circle/users") made
+  // from app.fluxonarc.xyz got rewritten to "/app/api/circle/users" (no such
+  // route exists; the real path is just /api/circle/users regardless of
+  // subdomain), a silent 404 that surfaced as "Failed to set up your Circle
+  // account" with no clue the actual cause was routing, not the Circle
+  // integration itself. Same host-based rewrite that made bare app/docs
+  // paths work, applied somewhere it should never have reached.
+  matcher: ["/((?!api/|_next/static|_next/image|favicon.ico|brand/|tokens/).*)"],
 };
