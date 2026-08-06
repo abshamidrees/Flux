@@ -14,6 +14,14 @@ import * as Contracts from ".";
 declare module "hardhat/types/runtime" {
   interface HardhatEthersHelpers extends HardhatEthersHelpersBase {
     getContractFactory(
+      name: "FluxAgentRegistry",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.FluxAgentRegistry__factory>;
+    getContractFactory(
+      name: "IERC20",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IERC20__factory>;
+    getContractFactory(
       name: "FluxLimitOrder",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.FluxLimitOrder__factory>;
@@ -43,6 +51,16 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.MockRouter__factory>;
 
     getContractAt(
+      name: "FluxAgentRegistry",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.FluxAgentRegistry>;
+    getContractAt(
+      name: "IERC20",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IERC20>;
+    getContractAt(
       name: "FluxLimitOrder",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -79,6 +97,14 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.MockRouter>;
 
     deployContract(
+      name: "FluxAgentRegistry",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.FluxAgentRegistry>;
+    deployContract(
+      name: "IERC20",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC20>;
+    deployContract(
       name: "FluxLimitOrder",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.FluxLimitOrder>;
@@ -107,6 +133,16 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockRouter>;
 
+    deployContract(
+      name: "FluxAgentRegistry",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.FluxAgentRegistry>;
+    deployContract(
+      name: "IERC20",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC20>;
     deployContract(
       name: "FluxLimitOrder",
       args: any[],

@@ -9,6 +9,8 @@
     "deploy:local": "npx hardhat run scripts/deploy.ts --network hardhat",
     "deploy:limitorder:arc": "npx hardhat run scripts/deployLimitOrder.ts --network arc_testnet",
     "deploy:limitorder:local": "npx hardhat run scripts/deployLimitOrder.ts --network hardhat",
+    "deploy:agentregistry:arc": "npx hardhat run scripts/deployAgentRegistry.ts --network arc_testnet",
+    "deploy:agentregistry:local": "npx hardhat run scripts/deployAgentRegistry.ts --network hardhat",
     "node": "npx hardhat node",
     "clean": "npx hardhat clean"
   },

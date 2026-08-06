@@ -42,9 +42,15 @@ export const FLUX_ADDRESS = (process.env.NEXT_PUBLIC_FLUX_ADDRESS || "") as `0x$
 export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS || "") as `0x${string}`;
 // Empty until scripts/deployLimitOrder.ts has been run — swap UI treats this as "not live yet".
 export const FLUX_LIMIT_ORDER_ADDRESS = (process.env.NEXT_PUBLIC_FLUX_LIMIT_ORDER_ADDRESS || "") as `0x${string}`;
+// Empty until scripts/deployAgentRegistry.ts has been run.
+export const FLUX_AGENT_REGISTRY_ADDRESS = (process.env.NEXT_PUBLIC_FLUX_AGENT_REGISTRY_ADDRESS || "") as `0x${string}`;
 // Approximate contract deployment block on Arc Testnet (used as fromBlock for getLogs)
 // Set to ~May 14 2026. If events are missing, lower this value.
 export const FLUX_DEPLOY_BLOCK = 42_100_000n;
+// Phase H3 deploy block (2026-08-06, redeployed after adding
+// recordExternalSpend) — real value, read from the chain at deploy time
+// (latest block was 55,563,641), with a small margin.
+export const FLUX_AGENT_REGISTRY_DEPLOY_BLOCK = 55_563_500n;
 
 // ── USDC ABI (minimal) ────────────────────────────────────
 export const USDC_ABI = [
@@ -402,6 +408,221 @@ export const FLUX_LIMIT_ORDER_ABI = [
       { name: "id", type: "uint256", indexed: true },
       { name: "router", type: "address", indexed: true },
       { name: "amountOut", type: "uint256", indexed: false },
+    ],
+  },
+] as const;
+
+// Phase H3 — FluxAgentRegistry (contracts/FluxAgentRegistry.sol). The
+// on-chain enforcement layer for agent spending caps; see that file's
+// header for why enforcement lives here rather than at Circle's wallet
+// layer (Circle's policy API is mainnet-only; Arc is testnet-only).
+export const FLUX_AGENT_REGISTRY_ABI = [
+  {
+    name: "registerAgent",
+    type: "function",
+    inputs: [
+      { name: "agentWallet", type: "address" },
+      { name: "perTxCap", type: "uint256" },
+      { name: "dailyCap", type: "uint256" },
+      { name: "totalCap", type: "uint256" },
+      { name: "expiry", type: "uint64" },
+    ],
+    outputs: [{ name: "agentId", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    name: "updateCaps",
+    type: "function",
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "perTxCap", type: "uint256" },
+      { name: "dailyCap", type: "uint256" },
+      { name: "totalCap", type: "uint256" },
+      { name: "expiry", type: "uint64" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  { name: "pause",  type: "function", inputs: [{ name: "agentId", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
+  { name: "resume", type: "function", inputs: [{ name: "agentId", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
+  // Kill-switch — instant, owner-only, irreversible.
+  { name: "revoke", type: "function", inputs: [{ name: "agentId", type: "uint256" }], outputs: [], stateMutability: "nonpayable" },
+  {
+    name: "setAllowlisted",
+    type: "function",
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "addrs", type: "address[]" },
+      { name: "allowed", type: "bool" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    name: "setBlocklisted",
+    type: "function",
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "addrs", type: "address[]" },
+      { name: "blocked", type: "bool" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    name: "setRestrictToAllowlist",
+    type: "function",
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "restricted", type: "bool" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  // Called by the agent's own wallet (via a Circle contract-execution
+  // challenge in Phase H4, or directly by an externally-owned agent) — not
+  // called from the owner's own dashboard session. Moves USDC itself
+  // (transferFrom) — trustlessly enforced, see the contract's own comment.
+  {
+    name: "recordPayment",
+    type: "function",
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  // The x402/Gateway counterpart — Circle's Gateway already moved the funds,
+  // so this only validates the same guardrails and records the spend for
+  // the audit trail. NOT trustlessly enforced (see the contract's own
+  // doc comment) — an integration must actually call this.
+  {
+    name: "recordExternalSpend",
+    type: "function",
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    name: "getAgent",
+    type: "function",
+    inputs: [{ name: "agentId", type: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "agentWallet", type: "address" },
+          { name: "owner", type: "address" },
+          { name: "perTxCap", type: "uint256" },
+          { name: "dailyCap", type: "uint256" },
+          { name: "totalCap", type: "uint256" },
+          { name: "spentToday", type: "uint256" },
+          { name: "spentTotal", type: "uint256" },
+          { name: "expiry", type: "uint64" },
+          { name: "dayStart", type: "uint64" },
+          { name: "status", type: "uint8" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    name: "isPayable",
+    type: "function",
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [
+      { name: "ok", type: "bool" },
+      { name: "reason", type: "string" },
+    ],
+    stateMutability: "view",
+  },
+  { name: "nextAgentId", type: "function", inputs: [], outputs: [{ type: "uint256" }], stateMutability: "view" },
+  {
+    name: "allowlisted",
+    type: "function",
+    inputs: [{ type: "uint256" }, { type: "address" }],
+    outputs: [{ type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    name: "blocklisted",
+    type: "function",
+    inputs: [{ type: "uint256" }, { type: "address" }],
+    outputs: [{ type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    name: "restrictToAllowlist",
+    type: "function",
+    inputs: [{ type: "uint256" }],
+    outputs: [{ type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    name: "AgentRegistered",
+    type: "event",
+    inputs: [
+      { name: "agentId", type: "uint256", indexed: true },
+      { name: "owner", type: "address", indexed: true },
+      { name: "agentWallet", type: "address", indexed: true },
+      { name: "perTxCap", type: "uint256", indexed: false },
+      { name: "dailyCap", type: "uint256", indexed: false },
+      { name: "totalCap", type: "uint256", indexed: false },
+      { name: "expiry", type: "uint64", indexed: false },
+    ],
+  },
+  {
+    name: "CapsUpdated",
+    type: "event",
+    inputs: [
+      { name: "agentId", type: "uint256", indexed: true },
+      { name: "perTxCap", type: "uint256", indexed: false },
+      { name: "dailyCap", type: "uint256", indexed: false },
+      { name: "totalCap", type: "uint256", indexed: false },
+      { name: "expiry", type: "uint64", indexed: false },
+    ],
+  },
+  { name: "AgentPaused",  type: "event", inputs: [{ name: "agentId", type: "uint256", indexed: true }] },
+  { name: "AgentResumed", type: "event", inputs: [{ name: "agentId", type: "uint256", indexed: true }] },
+  { name: "AgentRevoked", type: "event", inputs: [{ name: "agentId", type: "uint256", indexed: true }] },
+  {
+    name: "RecipientListUpdated",
+    type: "event",
+    inputs: [
+      { name: "agentId", type: "uint256", indexed: true },
+      { name: "recipient", type: "address", indexed: true },
+      { name: "allowlist", type: "bool", indexed: false },
+      { name: "value", type: "bool", indexed: false },
+    ],
+  },
+  {
+    name: "AllowlistModeSet",
+    type: "event",
+    inputs: [
+      { name: "agentId", type: "uint256", indexed: true },
+      { name: "restricted", type: "bool", indexed: false },
+    ],
+  },
+  {
+    name: "AgentPayment",
+    type: "event",
+    inputs: [
+      { name: "agentId", type: "uint256", indexed: true },
+      { name: "to", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "spentToday", type: "uint256", indexed: false },
+      { name: "spentTotal", type: "uint256", indexed: false },
     ],
   },
 ] as const;
