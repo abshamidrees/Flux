@@ -379,23 +379,10 @@ function RegisterForm({ onRegistered }: { onRegistered: () => void }) {
   );
 }
 
-/* ─── Marketplace (honest empty state) ───────────────────────────── */
-function MarketplaceTab() {
-  return (
-    <div className="card">
-      <EmptyState
-        icon={<IconActivity size={28} />}
-        title="No marketplace services yet"
-        desc="Nothing published yet. This section goes live once real services are available."
-      />
-    </div>
-  );
-}
-
 /* ─── Main page ───────────────────────────────────────────────────── */
 export default function AgentsPage() {
   const { isConnected, address } = useWallet();
-  const [tab, setTab] = useState<"agents" | "activity" | "marketplace">("agents");
+  const [tab, setTab] = useState<"agents" | "activity">("agents");
 
   const [myAgents, setMyAgents] = useState<RegistryAgentSummary[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
@@ -445,10 +432,9 @@ export default function AgentsPage() {
 
       {notDeployed && <div className="banner warn" style={{ marginBottom: 16 }}>FluxAgentRegistry address not configured.</div>}
 
-      <div className="tabs" style={{ maxWidth: 340, marginBottom: 22 }}>
+      <div className="tabs" style={{ maxWidth: 260, marginBottom: 22 }}>
         <button className={`tab ${tab === "agents" ? "active" : ""}`} onClick={() => setTab("agents")}>My Agents</button>
         <button className={`tab ${tab === "activity" ? "active" : ""}`} onClick={() => setTab("activity")}>Activity</button>
-        <button className={`tab ${tab === "marketplace" ? "active" : ""}`} onClick={() => setTab("marketplace")}>Marketplace</button>
       </div>
 
       {tab === "agents" && (
@@ -508,8 +494,6 @@ export default function AgentsPage() {
           )}
         </div>
       )}
-
-      {tab === "marketplace" && <MarketplaceTab />}
     </div>
   );
 }

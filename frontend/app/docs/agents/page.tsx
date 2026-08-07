@@ -25,6 +25,7 @@ export default function DocsAgentsPage() {
       <P>The agent calls <InlineCode>recordPayment</InlineCode>. The registry itself pulls the funds from the agent&apos;s wallet and sends them. This is trustless: the cap physically cannot be exceeded, because the money can&apos;t move without passing the check first.</P>
       <H3>Gateway / x402 payments</H3>
       <P>For agent-to-service payments (an AI agent paying per API call, for example), Circle&apos;s Gateway moves the funds directly through its own settlement path — the registry never touches that money. The agent calls <InlineCode>recordExternalSpend</InlineCode> to log the payment against the same caps, but this only works if the agent&apos;s own code calls it before paying. Nothing on-chain forces that call to happen, so this cap is enforced by convention, not by the contract. Flux&apos;s own agent-payment code always calls it; a third-party integration would need to as well.</P>
+      <P>Flux agents can only pay for services today — publishing your own endpoint so other agents pay you through Flux is intentionally out of scope for now.</P>
 
       <H2 id="guardrails">Guardrails</H2>
       <P>Beyond the three caps, each agent can have:</P>
