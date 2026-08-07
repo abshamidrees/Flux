@@ -9,7 +9,7 @@ import { USDC_ADDRESS, shortAddress } from "../../lib/arc";
 import { FluxMark, NetworkBanner } from "../../components/UI";
 import { LoadingScreen } from "../../components/LoadingScreen";
 import { NotificationBell } from "../../components/NotificationBell";
-import { IconSun, IconMoon, IconMenu, IconHome, IconBatch, IconStream, IconAgent } from "../../components/icons";
+import { IconSun, IconMoon, IconHome, IconBatch, IconStream, IconAgent } from "../../components/icons";
 import { SwapButton } from "../../components/swap/SwapButton";
 import { useWallet } from "../../lib/wallet/WalletContext";
 
@@ -49,8 +49,18 @@ function WalletMenu({ address, balance, onDisconnect }: {
   return (
     <div ref={ref} style={{ position: "relative" }}>
       {/* Same card treatment as the other header buttons (bell, theme, Swap):
-          --bg3 fill, --bdr border, 36px height, bg3->bg4 hover — no teal. */}
+          --bg3 fill, --bdr border, 36px height, bg3->bg4 hover — no teal.
+          At mobile widths this chip (143px, measured) was the single widest
+          item in the header's right-hand group and the only one that isn't
+          present in the signed-out state — 66px more than the "Connect
+          Wallet" button it replaces, which already had almost no margin to
+          spare. That's why the topnav only overflowed once connected: the
+          .wallet-chip-address/.wallet-chip-chevron classes below collapse it
+          to just the status dot (36px, matching every other icon-btn) at the
+          same breakpoint the nav links collapse at, so the connected state
+          never needs more header width than the disconnected one. */}
       <button
+        className="wallet-chip"
         onClick={() => setOpen(o => !o)}
         style={{
           fontFamily: "'Manrope',sans-serif", fontSize: 13, fontWeight: 600,
@@ -63,8 +73,8 @@ function WalletMenu({ address, balance, onDisconnect }: {
         onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.background = "var(--bg3)"; el.style.borderColor = "var(--bdr)"; }}
       >
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981", display: "inline-block", flexShrink: 0 }} />
-        {shortAddress(address)}
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "none", color: "var(--tx2)" }}>
+        <span className="wallet-chip-address">{shortAddress(address)}</span>
+        <svg className="wallet-chip-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "none", color: "var(--tx2)" }}>
           <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
         </svg>
       </button>
@@ -142,18 +152,6 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
     ? parseFloat(bal.formatted).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })
     : null;
 
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const mobileRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const fn = (e: MouseEvent) => { if (mobileRef.current && !mobileRef.current.contains(e.target as Node)) setMobileOpen(false); };
-    document.addEventListener("mousedown", fn);
-    return () => document.removeEventListener("mousedown", fn);
-  }, []);
-
-  // Close the mobile menu on route change so it doesn't stay open after navigating.
-  useEffect(() => { setMobileOpen(false); }, [path]);
-
   return (
     <header style={{
       position: "sticky", top: 0, zIndex: 100,
@@ -165,18 +163,7 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
       <div className="app-header-pad" style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
 
         {/* Logo + Nav */}
-        <div style={{ display: "flex", alignItems: "center" }} ref={mobileRef}>
-          {/* Mobile nav toggle — hidden on desktop, shown <=768px (globals.css) */}
-          <button
-            className="icon-btn app-nav-toggle"
-            style={{ marginRight: 10 }}
-            onClick={() => setMobileOpen(o => !o)}
-            title="Menu"
-            aria-label="Toggle navigation menu"
-          >
-            <IconMenu size={16} />
-          </button>
-
+        <div style={{ display: "flex", alignItems: "center" }}>
           <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9, marginRight: 28, textDecoration: "none" }}>
             <FluxMark size={26} />
             <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 16, color: "var(--tx)", letterSpacing: "-0.03em" }}>Flux</span>
@@ -202,32 +189,6 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
             })}
           </div>
 
-          {/* Mobile nav dropdown */}
-          {mobileOpen && (
-            <div style={{
-              position: "absolute", top: "calc(100% + 8px)", left: 14, right: 14,
-              background: "var(--bg2)", border: "1px solid var(--bdr2)",
-              borderRadius: 10, padding: 6,
-              boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-              zIndex: 500, animation: "slideUp 0.15s ease",
-            }}>
-              {NAV.map(n => {
-                const active = path === n.href;
-                return (
-                  <Link key={n.href} href={n.href} style={{
-                    display: "block", fontFamily: "'Manrope',sans-serif", fontSize: 14,
-                    fontWeight: active ? 700 : 600,
-                    color: active ? "var(--teal)" : "var(--tx)",
-                    background: active ? "var(--teal-10)" : "transparent",
-                    padding: "10px 12px", borderRadius: 7,
-                    textDecoration: "none",
-                  }}>
-                    {n.label}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
         </div>
 
         {/* Right */}

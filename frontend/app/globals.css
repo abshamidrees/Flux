@@ -367,13 +367,16 @@ a { text-decoration: none; }
   gap: 16px;
 }
 
-/* App/docs topnav mobile collapse — base (desktop) state; overridden below.
-   Selectors are doubled up with .icon-btn (not just .app-nav-toggle) because
+/* Docs topnav mobile collapse — base (desktop) state; overridden below.
+   Selector doubled up with .icon-btn (not just .docs-nav-toggle) because
    .icon-btn also sets display:flex unconditionally — at equal specificity
    the later rule in the file wins regardless of media query, which is what
    made the hamburger show on desktop too. The compound selector's higher
-   specificity fixes that regardless of declaration order. */
-.icon-btn.app-nav-toggle { display: none; }
+   specificity fixes that regardless of declaration order.
+   (The app section's own equivalent, .app-nav-toggle, was removed along
+   with its hamburger — the bottom tab bar covers the same nav already, so
+   showing it twice on mobile was redundant. Docs has no bottom tab bar,
+   so it keeps its hamburger.) */
 .wallet-connect-short { display: none; }
 .icon-btn.docs-nav-toggle { display: none; }
 .app-tabbar { display: none; }
@@ -412,9 +415,14 @@ a { text-decoration: none; }
   .tbl th, .tbl td { font-size: 11px; padding: 8px 10px; }
   .app-header-pad { padding: 0 14px !important; }
   .app-nav-links  { display: none !important; }
-  .icon-btn.app-nav-toggle { display: flex; }
   .app-tabbar     { display: flex; }
   .app-main-pad   { padding-bottom: 76px; }
+  /* Connected-only wallet chip (WalletMenu, app/app/layout.tsx) — collapses
+     to just the status dot, matching every other header icon-btn (36px).
+     !important needed: .wallet-chip's padding is an inline style, which
+     otherwise beats a plain stylesheet rule regardless of media query. */
+  .wallet-chip-address, .wallet-chip-chevron { display: none !important; }
+  .wallet-chip { width: 36px; padding: 0 !important; justify-content: center !important; gap: 0 !important; }
 }
 @media (max-width: 420px) {
   .wallet-connect-full  { display: none; }

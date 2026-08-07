@@ -92,6 +92,11 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
       <div style={{ borderBottom: "1px solid var(--bdr)", background: "var(--bg)", position: "sticky", top: 0, zIndex: 50 }}>
         <div className="docs-header-pad" style={{ maxWidth: 1320, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 24 }} ref={mobileRef}>
+            <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none" }}>
+              <FluxMark size={26} />
+              <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 16, color: "var(--tx)", letterSpacing: "-0.03em" }}>Flux</span>
+            </Link>
+
             {/* Mobile nav toggle — hidden on desktop, shown <=900px (globals.css) */}
             <button
               className="icon-btn docs-nav-toggle"
@@ -102,10 +107,6 @@ export default function DocsLayout({ children }: { children: ReactNode }) {
               <IconMenu size={16} />
             </button>
 
-            <Link href="/" style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none" }}>
-              <FluxMark size={26} />
-              <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 16, color: "var(--tx)", letterSpacing: "-0.03em" }}>Flux</span>
-            </Link>
             <span className="docs-badge-label" style={{ fontSize: 12, color: "var(--tx3)", fontWeight: 600, background: "var(--bg3)", padding: "2px 8px", borderRadius: 6, border: "1px solid var(--bdr)" }}>Docs</span>
 
             {/* Mobile nav dropdown */}
