@@ -106,6 +106,13 @@ export function Tooltip({ text, children }: { text: string; children?: ReactNode
             fontFamily: "'Manrope', sans-serif",
             boxShadow: "0 10px 28px rgba(0,0,0,0.45)",
             letterSpacing: "-0.01em",
+            // text-transform inherits by default — a Tooltip nested inside a
+            // .lbl-styled field label (uppercase by design, e.g. agents page's
+            // "Agent Wallet Address") would otherwise inherit that and render
+            // this multi-sentence explanation shouting in caps too. The label
+            // itself staying uppercase is correct/consistent; the popup's own
+            // prose never should be, regardless of what it's nested inside.
+            textTransform: "none",
           }}>
             {text}
           </span>

@@ -80,6 +80,15 @@ export default function BatchPage() {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
+  // Live, like ArcScan — the history tab keeps itself current without
+  // waiting on a manual refresh or an event subscription that could miss a
+  // log. Only runs while the tab is actually open.
+  useEffect(() => {
+    if (tab !== "history") return;
+    const id = setInterval(loadHistory, 1000);
+    return () => clearInterval(id);
+  }, [tab, loadHistory]);
+
   useWatchContractEvent({
     address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "BatchSettled",
     enabled: !!FLUX_ADDRESS,
@@ -270,7 +279,6 @@ export default function BatchPage() {
           <div className="card-hd">
             <div className="lbl" style={{ marginBottom:0 }}>My Batch History</div>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <span style={{ fontSize:12, color:"var(--tx3)", fontWeight:500 }}>Live from blockchain</span>
               <button className="btn btn-ghost btn-sm" onClick={loadHistory} disabled={loadingHistory} style={{ fontSize:11, padding:"2px 8px" }}>{loadingHistory?"Loading…":"↻ Refresh"}</button>
               {history.length>0 && <button className="btn btn-ghost btn-sm" onClick={exportCSV} style={{ fontSize:11, padding:"2px 8px" }}>↓ Export CSV</button>}
             </div>

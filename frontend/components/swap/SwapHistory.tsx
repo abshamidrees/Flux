@@ -142,6 +142,13 @@ export function SwapHistory() {
 
   useEffect(() => { load(); loadOrders(); }, [load, loadOrders]);
 
+  // Live, like ArcScan — this tab only fetches while it's mounted, so the
+  // interval naturally stops the moment the user switches away from it.
+  useEffect(() => {
+    const id = setInterval(() => { load(); loadOrders(); }, 1000);
+    return () => clearInterval(id);
+  }, [load, loadOrders]);
+
   const handleCancel = useCallback(
     async (id: bigint) => {
       const ok = await cancelOrder(id);

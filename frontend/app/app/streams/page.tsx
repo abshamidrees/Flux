@@ -132,6 +132,20 @@ export default function StreamsPage() {
 
   useEffect(() => { loadReceived(); }, [loadReceived]);
 
+  // Live, like ArcScan — whichever list tab is open keeps itself current
+  // without a manual refresh. Only the visible tab polls.
+  useEffect(() => {
+    if (tab !== "history") return;
+    const id = setInterval(loadStreams, 1000);
+    return () => clearInterval(id);
+  }, [tab, loadStreams]);
+
+  useEffect(() => {
+    if (tab !== "received") return;
+    const id = setInterval(loadReceived, 1000);
+    return () => clearInterval(id);
+  }, [tab, loadReceived]);
+
   useWatchContractEvent({
     address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, eventName: "StreamCreated",
     enabled: !!FLUX_ADDRESS,
@@ -298,7 +312,6 @@ export default function StreamsPage() {
               {activeCount>0 && <span style={{ fontSize:11, color:"var(--teal)", fontWeight:600 }}>{activeCount} active</span>}
             </div>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <span style={{ fontSize:12, color:"var(--tx3)", fontWeight:500 }}>Live from blockchain</span>
               <button className="btn btn-ghost btn-sm" onClick={loadStreams} disabled={loading} style={{ fontSize:11, padding:"2px 8px" }}>{loading?"Loading…":"↻ Refresh"}</button>
             </div>
           </div>
@@ -354,7 +367,6 @@ export default function StreamsPage() {
           <div className="card-hd">
             <div className="lbl" style={{ marginBottom:0 }}>Received Streams</div>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <span style={{ fontSize:12, color:"var(--tx3)", fontWeight:500 }}>Live from blockchain</span>
               <button className="btn btn-ghost btn-sm" onClick={loadReceived} disabled={receivedLoading} style={{ fontSize:11, padding:"2px 8px" }}>{receivedLoading?"Loading…":"↻ Refresh"}</button>
             </div>
           </div>

@@ -416,15 +416,20 @@ export default function AgentsPage() {
   useEffect(() => { loadAgents(); }, [loadAgents]);
   useEffect(() => { if (tab === "activity") loadPayments(); }, [tab, loadPayments]);
 
+  // Live, like ArcScan — the activity feed keeps itself current without a
+  // manual refresh. Only polls while that tab is actually open.
+  useEffect(() => {
+    if (tab !== "activity") return;
+    const id = setInterval(loadPayments, 1000);
+    return () => clearInterval(id);
+  }, [tab, loadPayments]);
+
   const notDeployed = !FLUX_AGENT_REGISTRY_ADDRESS;
 
   return (
     <div className="page-pad">
       <div style={{ marginBottom: 22 }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <h1 style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800, color: "var(--tx)", letterSpacing: "-0.03em", marginBottom: 3 }}>Agent Registry</h1>
-          <a href="/docs/agents" style={{ fontSize: 12, fontWeight: 600, color: "var(--teal-l)" }}>Read the docs →</a>
-        </div>
+        <h1 style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800, color: "var(--tx)", letterSpacing: "-0.03em", marginBottom: 3 }}>Agent Registry</h1>
         <p style={{ fontSize: 13, color: "var(--tx3)", fontWeight: 500, maxWidth: 640 }}>
           Give an AI agent its own USDC wallet with hard spending limits, then let it pay on its own.
         </p>
@@ -464,7 +469,6 @@ export default function AgentsPage() {
           <div className="card-hd">
             <div className="lbl" style={{ marginBottom: 0 }}>Live Payment Feed</div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--tx3)", fontWeight: 500 }}>Reconstructed from AgentPayment events</span>
               <button className="btn btn-ghost btn-sm" onClick={loadPayments} disabled={payLoading} style={{ fontSize: 11, padding: "2px 8px" }}>{payLoading ? "Loading…" : "↻ Refresh"}</button>
             </div>
           </div>
