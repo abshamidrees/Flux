@@ -65,6 +65,19 @@ html { font-size: 16px; scroll-behavior: smooth; -webkit-font-smoothing: antiali
 body { font-family: 'Manrope', sans-serif; background: var(--land-bg); color: var(--land-text); line-height: 1.6; }
 a { text-decoration: none; }
 
+/* The whole app was eyeballed at 110% browser zoom, so at the actual
+   default (100%) everything reads smaller/sparser than intended. `zoom`
+   (not `transform: scale`) is the direct CSS equivalent of browser zoom —
+   it affects real layout sizing, not just a visual scale, so this
+   reproduces exactly what 110% already looked like, natively at 100%.
+   Desktop-only: at mobile widths this would shrink the *effective* CSS
+   viewport by the same ~9%, re-introducing the topnav/overflow issues
+   already fixed against exact pixel budgets there — the zoom complaint
+   was about desktop windows specifically, never mobile. */
+@media (min-width: 769px) {
+  html { zoom: 1.1; }
+}
+
 /* ── APP SHELL ───────────────────────────────────────────── */
 .app-root {
   background: var(--bg);
