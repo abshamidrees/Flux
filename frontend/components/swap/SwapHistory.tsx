@@ -127,16 +127,22 @@ export function SwapHistory() {
   const { orders, load: loadOrders } = useOpenOrders(address);
   const { cancelOrder } = useLimitOrders();
 
-  const load = useCallback(async () => {
+  // `silent` = stale-while-revalidate: only the first load (nothing on
+  // screen yet) toggles the loading state or surfaces an error. Background
+  // polls after that update the list on success and otherwise leave the
+  // last good data up untouched — no flicker, no error banner over a
+  // transient blip, matching ArcScan/Relay never blanking a list mid-poll.
+  const load = useCallback(async (silent = false) => {
     if (!address) return;
-    setLoading(true);
-    setError("");
+    if (!silent) { setLoading(true); setError(""); }
     try {
-      setRecords(await fetchSwapHistory(address));
+      const data = await fetchSwapHistory(address);
+      setRecords(data);
+      if (!silent) setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message.slice(0, 120) : "Could not load history");
+      if (!silent) setError(e instanceof Error ? e.message.slice(0, 120) : "Could not load history");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [address]);
 
@@ -145,7 +151,7 @@ export function SwapHistory() {
   // Live, like ArcScan — this tab only fetches while it's mounted, so the
   // interval naturally stops the moment the user switches away from it.
   useEffect(() => {
-    const id = setInterval(() => { load(); loadOrders(); }, 1000);
+    const id = setInterval(() => { load(true); loadOrders(); }, 1000);
     return () => clearInterval(id);
   }, [load, loadOrders]);
 

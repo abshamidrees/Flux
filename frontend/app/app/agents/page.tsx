@@ -402,25 +402,33 @@ export default function AgentsPage() {
     } finally { setAgentsLoading(false); }
   }, [address]);
 
-  const loadPayments = useCallback(async () => {
+  // `silent` = stale-while-revalidate: only the first load (nothing on
+  // screen yet) toggles the loading state or surfaces an error. Background
+  // polls after that update the feed on success and otherwise leave the
+  // last good data up untouched — no flicker, no error banner over a
+  // transient blip, matching ArcScan/Relay never blanking a list mid-poll.
+  const loadPayments = useCallback(async (silent = false) => {
     if (!FLUX_AGENT_REGISTRY_ADDRESS) return;
-    setPayLoading(true); setPayErr("");
+    if (!silent) { setPayLoading(true); setPayErr(""); }
     try {
       const ids = myAgents.map(a => a.agentId);
-      setPayments(await fetchAgentPayments(ids.length ? ids : undefined));
+      const data = await fetchAgentPayments(ids.length ? ids : undefined);
+      setPayments(data);
+      if (!silent) setPayErr("");
     } catch (e: unknown) {
-      setPayErr(`Could not load activity: ${(e instanceof Error ? e.message : String(e)).slice(0, 100)}`);
-    } finally { setPayLoading(false); }
+      if (!silent) setPayErr(`Could not load activity: ${(e instanceof Error ? e.message : String(e)).slice(0, 100)}`);
+    } finally { if (!silent) setPayLoading(false); }
   }, [myAgents]);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
   useEffect(() => { if (tab === "activity") loadPayments(); }, [tab, loadPayments]);
 
-  // Live, like ArcScan — the activity feed keeps itself current without a
-  // manual refresh. Only polls while that tab is actually open.
+  // Live, like ArcScan — the activity feed keeps itself current in the
+  // background, no manual refresh and no loading flicker. Only polls while
+  // that tab is actually open.
   useEffect(() => {
     if (tab !== "activity") return;
-    const id = setInterval(loadPayments, 1000);
+    const id = setInterval(() => loadPayments(true), 1000);
     return () => clearInterval(id);
   }, [tab, loadPayments]);
 
@@ -468,14 +476,11 @@ export default function AgentsPage() {
         <div className="card" style={{ overflow: "hidden" }}>
           <div className="card-hd">
             <div className="lbl" style={{ marginBottom: 0 }}>Live Payment Feed</div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button className="btn btn-ghost btn-sm" onClick={loadPayments} disabled={payLoading} style={{ fontSize: 11, padding: "2px 8px" }}>{payLoading ? "Loading…" : "↻ Refresh"}</button>
-            </div>
           </div>
           {payLoading ? (
             <div style={{ padding: "40px 24px", textAlign: "center", color: "var(--tx3)", fontSize: 14 }}>Loading activity…</div>
           ) : payErr ? (
-            <div style={{ padding: 24 }}><div className="banner err" style={{ marginBottom: 12 }}>{payErr}</div><button className="btn btn-ghost btn-sm" onClick={loadPayments}>Try again</button></div>
+            <div style={{ padding: 24 }}><div className="banner err" style={{ marginBottom: 12 }}>{payErr}</div><button className="btn btn-ghost btn-sm" onClick={() => loadPayments()}>Try again</button></div>
           ) : payments.length === 0 ? (
             <EmptyState icon={<IconActivity size={28} />} title="No payments yet" desc="Agent payments show up here live as they happen." />
           ) : (

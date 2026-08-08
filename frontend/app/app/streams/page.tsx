@@ -103,46 +103,59 @@ export default function StreamsPage() {
   const { isLoading: cnConf } = useWaitForTransactionReceipt({ hash: cnTx });
 
   // ── Fetch via ArcScan API (instant) ──────────────────────
-  const loadStreams = useCallback(async () => {
+  // `silent` = stale-while-revalidate: only the first load (nothing on
+  // screen yet) toggles the loading state or surfaces an error. Every
+  // background poll after that updates the table on success and otherwise
+  // just leaves the last good data up — no flicker, no error banner over a
+  // transient blip, matching how ArcScan/Relay never blank a list between
+  // polls.
+  const loadStreams = useCallback(async (silent = false) => {
     if (!address || !FLUX_ADDRESS) return;
-    setLoading(true); setLoadError("");
+    if (!silent) { setLoading(true); setLoadError(""); }
     try {
       const data = await fetchStreams(address);
       setStreams(data);
+      if (!silent) setLoadError("");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setLoadError(`Could not load streams: ${msg.slice(0, 100)}`);
-    } finally { setLoading(false); }
+      if (!silent) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setLoadError(`Could not load streams: ${msg.slice(0, 100)}`);
+      }
+    } finally { if (!silent) setLoading(false); }
   }, [address]);
 
   useEffect(() => { loadStreams(); }, [loadStreams]);
 
   // ── Fetch streams where I am the RECIPIENT ────────────────
-  const loadReceived = useCallback(async () => {
+  const loadReceived = useCallback(async (silent = false) => {
     if (!address || !FLUX_ADDRESS) return;
-    setReceivedLoading(true); setReceivedError("");
+    if (!silent) { setReceivedLoading(true); setReceivedError(""); }
     try {
       const data = await fetchReceivedStreams(address);
       setReceived(data);
+      if (!silent) setReceivedError("");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setReceivedError(`Could not load received streams: ${msg.slice(0, 100)}`);
-    } finally { setReceivedLoading(false); }
+      if (!silent) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setReceivedError(`Could not load received streams: ${msg.slice(0, 100)}`);
+      }
+    } finally { if (!silent) setReceivedLoading(false); }
   }, [address]);
 
   useEffect(() => { loadReceived(); }, [loadReceived]);
 
-  // Live, like ArcScan — whichever list tab is open keeps itself current
-  // without a manual refresh. Only the visible tab polls.
+  // Live, like ArcScan — whichever list tab is open keeps itself current in
+  // the background, no manual refresh and no loading flicker. Only the
+  // visible tab polls.
   useEffect(() => {
     if (tab !== "history") return;
-    const id = setInterval(loadStreams, 1000);
+    const id = setInterval(() => loadStreams(true), 1000);
     return () => clearInterval(id);
   }, [tab, loadStreams]);
 
   useEffect(() => {
     if (tab !== "received") return;
-    const id = setInterval(loadReceived, 1000);
+    const id = setInterval(() => loadReceived(true), 1000);
     return () => clearInterval(id);
   }, [tab, loadReceived]);
 
@@ -311,14 +324,11 @@ export default function StreamsPage() {
               <div className="lbl" style={{ marginBottom:0 }}>My Streams</div>
               {activeCount>0 && <span style={{ fontSize:11, color:"var(--teal)", fontWeight:600 }}>{activeCount} active</span>}
             </div>
-            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <button className="btn btn-ghost btn-sm" onClick={loadStreams} disabled={loading} style={{ fontSize:11, padding:"2px 8px" }}>{loading?"Loading…":"↻ Refresh"}</button>
-            </div>
           </div>
           {loading ? (
             <div style={{ padding:"40px 24px", textAlign:"center", color:"var(--tx3)", fontSize:14 }}>Loading streams…</div>
           ) : loadError ? (
-            <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{loadError}</div><button className="btn btn-ghost btn-sm" onClick={loadStreams}>Try again</button></div>
+            <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{loadError}</div><button className="btn btn-ghost btn-sm" onClick={() => loadStreams()}>Try again</button></div>
           ) : streams.length===0 ? (
             <EmptyState icon={<IconEmptyStream size={28} />} title="No streams yet" desc="Create your first stream. Data loads instantly from the blockchain." action={<button className="btn btn-primary btn-sm" onClick={()=>setTab("create")}>Create a stream</button>} />
           ) : (
@@ -366,14 +376,11 @@ export default function StreamsPage() {
         <div className="card" style={{ overflow:"hidden" }}>
           <div className="card-hd">
             <div className="lbl" style={{ marginBottom:0 }}>Received Streams</div>
-            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <button className="btn btn-ghost btn-sm" onClick={loadReceived} disabled={receivedLoading} style={{ fontSize:11, padding:"2px 8px" }}>{receivedLoading?"Loading…":"↻ Refresh"}</button>
-            </div>
           </div>
           {receivedLoading ? (
             <div style={{ padding:"40px 24px", textAlign:"center", color:"var(--tx3)", fontSize:14 }}>Loading received streams…</div>
           ) : receivedError ? (
-            <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{receivedError}</div><button className="btn btn-ghost btn-sm" onClick={loadReceived}>Try again</button></div>
+            <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{receivedError}</div><button className="btn btn-ghost btn-sm" onClick={() => loadReceived()}>Try again</button></div>
           ) : received.length===0 ? (
             <EmptyState icon={<IconEmptyStream size={28} />} title="No streams received" desc="Streams other people create for you appear here, with a Withdraw button as soon as they start." />
           ) : (

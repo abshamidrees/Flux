@@ -66,26 +66,37 @@ export default function BatchPage() {
   const fee   = total * 0.001;
 
   // ── Fetch via ArcScan API (instant, pre-indexed) ──────────
-  const loadHistory = useCallback(async () => {
+  // `silent` drives the stale-while-revalidate behaviour the background poll
+  // below needs: the FIRST load (nothing on screen yet) shows the loading
+  // state and surfaces errors normally, but every polled refresh after that
+  // updates history/historyError only on success and never touches
+  // loadingHistory — so the table already on screen never gets replaced by
+  // a "Loading…" flash or an error banner over a transient blip. A poll
+  // that fails just leaves the last good data up and quietly retries next
+  // tick, same as ArcScan/Relay never blank their list between polls.
+  const loadHistory = useCallback(async (silent = false) => {
     if (!address || !FLUX_ADDRESS) return;
-    setLoadingHistory(true); setHistoryError("");
+    if (!silent) { setLoadingHistory(true); setHistoryError(""); }
     try {
       const items = await fetchBatchHistory(address);
       setHistory(items);
+      if (!silent) setHistoryError("");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setHistoryError(`Could not load history: ${msg.slice(0, 100)}`);
-    } finally { setLoadingHistory(false); }
+      if (!silent) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setHistoryError(`Could not load history: ${msg.slice(0, 100)}`);
+      }
+    } finally { if (!silent) setLoadingHistory(false); }
   }, [address]);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
-  // Live, like ArcScan — the history tab keeps itself current without
-  // waiting on a manual refresh or an event subscription that could miss a
-  // log. Only runs while the tab is actually open.
+  // Live, like ArcScan — the history tab keeps itself current in the
+  // background, no manual refresh and no visible loading flicker every
+  // second. Only runs while the tab is actually open.
   useEffect(() => {
     if (tab !== "history") return;
-    const id = setInterval(loadHistory, 1000);
+    const id = setInterval(() => loadHistory(true), 1000);
     return () => clearInterval(id);
   }, [tab, loadHistory]);
 
@@ -278,15 +289,16 @@ export default function BatchPage() {
         <div className="card" style={{ overflow:"hidden" }}>
           <div className="card-hd">
             <div className="lbl" style={{ marginBottom:0 }}>My Batch History</div>
-            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <button className="btn btn-ghost btn-sm" onClick={loadHistory} disabled={loadingHistory} style={{ fontSize:11, padding:"2px 8px" }}>{loadingHistory?"Loading…":"↻ Refresh"}</button>
-              {history.length>0 && <button className="btn btn-ghost btn-sm" onClick={exportCSV} style={{ fontSize:11, padding:"2px 8px" }}>↓ Export CSV</button>}
-            </div>
+            {history.length>0 && (
+              <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                <button className="btn btn-ghost btn-sm" onClick={exportCSV} style={{ fontSize:11, padding:"2px 8px" }}>↓ Export CSV</button>
+              </div>
+            )}
           </div>
           {loadingHistory ? (
             <div style={{ padding:"40px 24px", textAlign:"center", color:"var(--tx3)", fontSize:14 }}>Loading history…</div>
           ) : historyError ? (
-            <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{historyError}</div><button className="btn btn-ghost btn-sm" onClick={loadHistory}>Try again</button></div>
+            <div style={{ padding:"24px" }}><div className="banner err" style={{ marginBottom:12 }}>{historyError}</div><button className="btn btn-ghost btn-sm" onClick={() => loadHistory()}>Try again</button></div>
           ) : history.length===0 ? (
             <EmptyState icon={<IconEmptyList size={28} />} title="No batch history yet" desc="Your settled batches appear here instantly from the blockchain." />
           ) : (
