@@ -6,27 +6,68 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useWallet } from "../../../lib/wallet/WalletContext";
 import { FLUX_ABI, FLUX_ADDRESS, USDC_ABI, USDC_ADDRESS, parseUSDC, formatUSDC, explorerLink } from "../../../lib/arc";
 import { fetchStreams, fetchReceivedStreams, type StreamRecord } from "../../../lib/blockchain";
+import { useStreamLiveState, type StreamLiveState } from "../../../hooks/useStreamLiveState";
 import { Tooltip, ConfirmModal, EmptyState, TxBanner } from "../../../components/UI";
 import { IconStream, IconWithdraw, IconCancel, IconEmptyStream } from "../../../components/icons";
 
 const ADDR = /^0x[0-9a-fA-F]{40}$/;
-type StreamStatus = "active" | "finished" | "cancelled" | "withdrawn";
+// "withdrawn" is deliberately NOT a status here — withdrawFromStream is
+// repeatable (claims vested-minus-released each call), so "a withdrawal
+// happened at some point" is not a terminal state. The only terminal states
+// are "cancelled" (sender cancelled) and "settled" (fully released — nothing
+// left to ever claim again), both read live from the contract, not guessed
+// from event history.
+type StreamStatus = "upcoming" | "active" | "finished" | "settled" | "cancelled";
 
-function getDisplayStatus(s: StreamRecord): StreamStatus {
-  if (s.status === "cancelled" || s.status === "withdrawn") return s.status;
-  if (Number(s.endTime) * 1000 < Date.now()) return "finished";
+function getDisplayStatus(s: StreamRecord, live?: StreamLiveState): StreamStatus {
+  if (live?.cancelled) return "cancelled";
+  if (live && live.released >= live.totalAmount) return "settled";
+  const now = Date.now();
+  if (Number(s.startTime) * 1000 > now) return "upcoming";
+  if (Number(s.endTime) * 1000 < now) return "finished";
   return "active";
 }
 
 function StatusBadge({ status }: { status: StreamStatus }) {
   const cfg = {
     active:    { label: "● Active",    bg: "var(--teal-10)",         color: "var(--teal)",  border: "var(--teal-20)" },
+    upcoming:  { label: "○ Upcoming",  bg: "rgba(100,116,139,0.12)", color: "#94a3b8",      border: "rgba(100,116,139,0.25)" },
     finished:  { label: "✓ Finished",  bg: "rgba(100,116,139,0.12)", color: "#94a3b8",      border: "rgba(100,116,139,0.25)" },
+    settled:   { label: "✓ Settled",   bg: "rgba(16,185,129,0.1)",   color: "#10b981",      border: "rgba(16,185,129,0.2)" },
     cancelled: { label: "✕ Cancelled", bg: "rgba(239,68,68,0.08)",   color: "#f87171",      border: "rgba(239,68,68,0.2)" },
-    withdrawn: { label: "↓ Withdrawn", bg: "rgba(139,92,246,0.1)",   color: "#a78bfa",      border: "rgba(139,92,246,0.2)" },
   } as const;
   const c = cfg[status];
   return <span style={{ background:c.bg, color:c.color, border:`1px solid ${c.border}`, borderRadius:999, padding:"2px 8px", fontSize:10, fontWeight:700, whiteSpace:"nowrap" }}>{c.label}</span>;
+}
+
+// Vesting/withdrawal meter — every number here comes from a live contract
+// read (useStreamLiveState), never localStorage or event replay. Two-tone
+// fill in one track: solid teal = already withdrawn, pale teal = vested and
+// claimable now, bare track = not yet vested.
+function StreamProgressMeter({ live }: { live?: StreamLiveState }) {
+  if (!live || live.totalAmount === 0n) {
+    return <span style={{ fontSize:11, color:"var(--tx3)" }}>—</span>;
+  }
+  const total = Number(live.totalAmount);
+  const vestedPct    = Math.min(100, (Number(live.released + live.claimable) / total) * 100);
+  const withdrawnPct = Math.min(100, (Number(live.released) / total) * 100);
+  return (
+    <div style={{ minWidth:132 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", gap:8, fontFamily:"'IBM Plex Mono',monospace", fontSize:9.5, color:"var(--tx3)", marginBottom:4, whiteSpace:"nowrap" }}>
+        <span>{vestedPct.toFixed(0)}% vested</span>
+        <span>{withdrawnPct.toFixed(0)}% withdrawn</span>
+      </div>
+      <div className="prog-track" style={{ position:"relative" }}>
+        <div className="prog-fill" style={{ width:`${vestedPct}%`, background:"var(--teal-20)", position:"absolute", left:0, top:0 }} />
+        <div className="prog-fill" style={{ width:`${withdrawnPct}%`, background:"var(--teal)", position:"absolute", left:0, top:0 }} />
+      </div>
+      {live.claimable > 0n && (
+        <div style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:9.5, color:"#10b981", fontWeight:700, marginTop:4, whiteSpace:"nowrap" }}>
+          ${formatUSDC(live.claimable)} claimable now
+        </div>
+      )}
+    </div>
+  );
 }
 
 function FieldError({ msg }: { msg: string }) {
@@ -98,9 +139,17 @@ export default function StreamsPage() {
   const [cnTx, setCnTx] = useState<`0x${string}`|undefined>();
   const [cnConfirm, setCnConfirm] = useState(false); const [cnSnap, setCnSnap] = useState("");
 
-  const { isLoading: cConf }  = useWaitForTransactionReceipt({ hash: cTx });
-  const { isLoading: wConf }  = useWaitForTransactionReceipt({ hash: wTx });
-  const { isLoading: cnConf } = useWaitForTransactionReceipt({ hash: cnTx });
+  const { isLoading: cConf }                    = useWaitForTransactionReceipt({ hash: cTx });
+  const { isLoading: wConf,  isSuccess: wOk }    = useWaitForTransactionReceipt({ hash: wTx });
+  const { isLoading: cnConf, isSuccess: cnOk }   = useWaitForTransactionReceipt({ hash: cnTx });
+
+  // Live per-stream state (released/claimable/cancelled) — the only correct
+  // source for "can this be withdrawn right now." Discovery (which IDs
+  // exist) comes from loadStreams/loadReceived below; current state is
+  // always a fresh contract read, never inferred from whether a
+  // StreamWithdrawn event has ever fired. See hooks/useStreamLiveState.ts.
+  const { live: streamsLive,  refetch: refetchStreamsLive }  = useStreamLiveState(streams.map(s => s.id));
+  const { live: receivedLive, refetch: refetchReceivedLive } = useStreamLiveState(received.map(s => s.id));
 
   // ── Fetch via ArcScan API (instant) ──────────────────────
   // `silent` = stale-while-revalidate: only the first load (nothing on
@@ -206,11 +255,22 @@ export default function StreamsPage() {
     try {
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName:"withdrawFromStream", args:[BigInt(wSnap)], gas:300_000n });
       setWTx(tx);
-      setStreams(prev => prev.map(s => s.id.toString()===wSnap ? {...s, status:"withdrawn" as StreamStatus} : s));
-      setReceived(prev => prev.map(s => s.id.toString()===wSnap ? {...s, status:"withdrawn" as StreamStatus} : s));
+      // No optimistic status write here — withdrawFromStream is repeatable,
+      // so the only correct post-tx state is a fresh contract read (the wOk
+      // effect below), not a locally-guessed "done" flag.
     } catch (e: unknown) { setWErr(((e as {shortMessage?:string}).shortMessage || "Failed").slice(0,140)); }
     finally { setWBusy(false); }
   };
+
+  // Once the withdraw actually confirms on-chain, refresh both the live
+  // claimable/released numbers and the list data — this is what makes the
+  // meter and button reflect reality immediately instead of waiting for the
+  // next poll tick.
+  useEffect(() => {
+    if (!wOk) return;
+    refetchStreamsLive(); refetchReceivedLive();
+    loadStreams(true); loadReceived(true);
+  }, [wOk, refetchStreamsLive, refetchReceivedLive, loadStreams, loadReceived]);
 
   // ── Cancel ────────────────────────────────────────────────
   const handleCancelClick = () => {
@@ -223,14 +283,19 @@ export default function StreamsPage() {
     try {
       const tx = await writeContractAsync({ address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName:"cancelStream", args:[BigInt(cnSnap)], gas:300_000n });
       setCnTx(tx);
-      setStreams(prev => prev.map(s => s.id.toString()===cnSnap ? {...s, status:"cancelled" as StreamStatus} : s));
     } catch (e: unknown) { setCnErr(((e as {shortMessage?:string}).shortMessage || "Failed").slice(0,140)); }
     finally { setCnBusy(false); }
   };
 
+  useEffect(() => {
+    if (!cnOk) return;
+    refetchStreamsLive(); refetchReceivedLive();
+    loadStreams(true); loadReceived(true);
+  }, [cnOk, refetchStreamsLive, refetchReceivedLive, loadStreams, loadReceived]);
+
   const fillWithdraw = (id: string) => { wIdVal.current=id; setWId(id); setTab("create"); setTimeout(()=>document.getElementById("w-id")?.focus(),100); };
   const fillCancel   = (id: string) => { cnIdVal.current=id; setCnId(id); setTab("create"); setTimeout(()=>document.getElementById("cn-id")?.focus(),100); };
-  const activeCount  = streams.filter(s=>getDisplayStatus(s)==="active").length;
+  const activeCount  = streams.filter(s => getDisplayStatus(s, streamsLive.get(s.id.toString())) === "active").length;
 
   return (
     <div className="page-pad">
@@ -256,7 +321,7 @@ export default function StreamsPage() {
       </div>
 
       {tab==="create" ? (
-        <div className="form-grid-2">
+        <div className="form-grid-2" style={{ alignItems:"start" }}>
           <div className="card">
             <div className="card-hd"><div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:24, height:24, borderRadius:6, background:"var(--teal-10)", border:"1px solid var(--teal-20)", display:"flex", alignItems:"center", justifyContent:"center" }}><IconStream size={14} /></div><span style={{ fontFamily:"'Manrope',sans-serif", fontSize:14, fontWeight:800, color:"var(--tx)" }}>Create Stream</span></div></div>
             <div className="card-p">
@@ -306,15 +371,6 @@ export default function StreamsPage() {
                 {cnTx && <TxBanner hash={cnTx} loading={cnConf} explorerUrl={explorerLink("tx",cnTx)} />}
               </div>
             </div>
-
-            <div className="card">
-              <div className="card-hd"><div className="lbl" style={{ marginBottom:0 }}>Stream mechanics</div></div>
-              <div className="card-p">
-                {[["Locked","USDC held in contract on creation"],["Vesting","amount × elapsed ÷ duration"],["Withdraw","Recipient claims anytime"],["Cancel","Sender recovers unvested USDC"],["Use cases","Payroll, grants, token vesting"]].map(([t,d])=>(
-                  <div key={t} style={{ display:"flex", gap:12, marginBottom:8 }}><span style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:10, fontWeight:700, color:"var(--teal)", flexShrink:0, minWidth:64, marginTop:2 }}>{t}</span><span style={{ fontSize:12, color:"var(--tx2)", lineHeight:1.5, fontWeight:500 }}>{d}</span></div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       ) : tab==="history" ? (
@@ -334,10 +390,13 @@ export default function StreamsPage() {
           ) : (
             <div style={{ overflowX:"auto" }}>
               <table className="tbl">
-                <thead><tr><th>ID</th><th>Status</th><th>Recipient</th><th>Amount</th><th>Start</th><th>End</th><th>Tx</th><th>Actions</th></tr></thead>
+                <thead><tr><th>ID</th><th>Status</th><th>Recipient</th><th>Amount</th><th>Progress</th><th>Start</th><th>End</th><th>Tx</th><th>Actions</th></tr></thead>
                 <tbody>
                   {streams.map((h,i)=>{
-                    const ds=getDisplayStatus(h);
+                    const live = streamsLive.get(h.id.toString());
+                    const ds = getDisplayStatus(h, live);
+                    const isSelf = address?.toLowerCase()===h.recipient.toLowerCase();
+                    const claimable = live?.claimable ?? 0n;
                     return (
                       <tr key={i}>
                         <td><span className="chip chip-teal">#{h.id.toString()}</span></td>
@@ -351,18 +410,21 @@ export default function StreamsPage() {
   </div>
 </td>
                         <td style={{ fontFamily:"'Manrope',sans-serif", fontWeight:700, color:"var(--teal)" }}>${formatUSDC(h.amount)}</td>
+                        <td><StreamProgressMeter live={live} /></td>
                         <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.startTime)*1000).toLocaleDateString()}</td>
                         <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.endTime)*1000).toLocaleDateString()}</td>
                         <td>{h.txHash && <a href={explorerLink("tx",h.txHash)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{h.txHash.slice(0,8)}… ↗</a>}</td>
-                        <td><div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                          {(ds==="active"||ds==="finished") && address?.toLowerCase()===h.recipient.toLowerCase() && (() => {
-                            const notStarted = Number(h.startTime)*1000 > Date.now();
-                            return notStarted
-                              ? <span style={{ fontSize:10, color:"var(--tx3)", fontWeight:600, fontFamily:"'IBM Plex Mono',monospace" }}>Not started</span>
-                              : <button className="btn btn-ghost btn-sm" onClick={()=>fillWithdraw(h.id.toString())}>Withdraw</button>;
-                          })()}
-                          {ds==="active" && <button className="btn btn-danger btn-sm" onClick={()=>fillCancel(h.id.toString())}>Cancel</button>}
-                          {ds!=="active" && ds!=="finished" && address?.toLowerCase()!==h.recipient.toLowerCase() && <span style={{ fontSize:11, color:"var(--tx3)" }}>—</span>}
+                        <td><div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+                          {isSelf && ds==="upcoming" && (
+                            <span style={{ fontSize:10, color:"var(--tx3)", fontWeight:600, fontFamily:"'IBM Plex Mono',monospace" }}>Not started</span>
+                          )}
+                          {isSelf && (ds==="active"||ds==="finished") && (
+                            <Tooltip text={claimable>0n ? `$${formatUSDC(claimable)} claimable now` : "Nothing new vested since your last withdraw"}>
+                              <button className="btn btn-ghost btn-sm" onClick={()=>fillWithdraw(h.id.toString())} disabled={claimable===0n}>Withdraw</button>
+                            </Tooltip>
+                          )}
+                          {(ds==="active"||ds==="upcoming") && <button className="btn btn-danger btn-sm" onClick={()=>fillCancel(h.id.toString())}>Cancel</button>}
+                          {!isSelf && ds!=="active" && ds!=="upcoming" && <span style={{ fontSize:11, color:"var(--tx3)" }}>—</span>}
                         </div></td>
                       </tr>
                     );
@@ -386,11 +448,12 @@ export default function StreamsPage() {
           ) : (
             <div style={{ overflowX:"auto" }}>
               <table className="tbl">
-                <thead><tr><th>ID</th><th>Status</th><th>From</th><th>Amount</th><th>Start</th><th>End</th><th>Tx</th><th>Actions</th></tr></thead>
+                <thead><tr><th>ID</th><th>Status</th><th>From</th><th>Amount</th><th>Progress</th><th>Start</th><th>End</th><th>Tx</th><th>Actions</th></tr></thead>
                 <tbody>
                   {received.map((h,i)=>{
-                    const ds=getDisplayStatus(h);
-                    const notStarted = Number(h.startTime)*1000 > Date.now();
+                    const live = receivedLive.get(h.id.toString());
+                    const ds = getDisplayStatus(h, live);
+                    const claimable = live?.claimable ?? 0n;
                     return (
                       <tr key={i}>
                         <td><span className="chip chip-teal">#{h.id.toString()}</span></td>
@@ -404,16 +467,20 @@ export default function StreamsPage() {
   </div>
 </td>
                         <td style={{ fontFamily:"'Manrope',sans-serif", fontWeight:700, color:"var(--teal)" }}>${formatUSDC(h.amount)}</td>
+                        <td><StreamProgressMeter live={live} /></td>
                         <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.startTime)*1000).toLocaleDateString()}</td>
                         <td style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11 }}>{new Date(Number(h.endTime)*1000).toLocaleDateString()}</td>
                         <td>{h.txHash && <a href={explorerLink("tx",h.txHash)} target="_blank" rel="noopener noreferrer" style={{ fontFamily:"'IBM Plex Mono',monospace", fontSize:11, color:"var(--teal)" }}>{h.txHash.slice(0,8)}… ↗</a>}</td>
                         <td>
-                          {(ds==="active"||ds==="finished") && (
-                            notStarted
-                              ? <span style={{ fontSize:10, color:"var(--tx3)", fontWeight:600, fontFamily:"'IBM Plex Mono',monospace" }}>Not started</span>
-                              : <button className="btn btn-ghost btn-sm" onClick={()=>fillWithdraw(h.id.toString())}>Withdraw</button>
+                          {ds==="upcoming" && (
+                            <span style={{ fontSize:10, color:"var(--tx3)", fontWeight:600, fontFamily:"'IBM Plex Mono',monospace" }}>Not started</span>
                           )}
-                          {(ds==="cancelled"||ds==="withdrawn") && <span style={{ fontSize:11, color:"var(--tx3)" }}>—</span>}
+                          {(ds==="active"||ds==="finished") && (
+                            <Tooltip text={claimable>0n ? `$${formatUSDC(claimable)} claimable now` : "Nothing new vested since your last withdraw"}>
+                              <button className="btn btn-ghost btn-sm" onClick={()=>fillWithdraw(h.id.toString())} disabled={claimable===0n}>Withdraw</button>
+                            </Tooltip>
+                          )}
+                          {(ds==="cancelled"||ds==="settled") && <span style={{ fontSize:11, color:"var(--tx3)" }}>—</span>}
                         </td>
                       </tr>
                     );

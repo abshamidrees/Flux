@@ -107,7 +107,7 @@ export interface BatchRecord {
 export interface StreamRecord {
   id: bigint; recipient: string; amount: bigint;
   startTime: bigint; endTime: bigint;
-  txHash: string; status: "active" | "finished" | "cancelled" | "withdrawn";
+  txHash: string;
   sender?: string; // only populated by fetchReceivedStreams — the OTHER party (the creator)
 }
 
@@ -145,57 +145,29 @@ export async function fetchBatchHistory(userAddress: string): Promise<BatchRecor
 // ── Streams ───────────────────────────────────────────────
 // StreamCreated: topic0=hash, topic1=id, topic2=sender, topic3=recipient
 // ArcScan only supports topic0_1_opr → fetch all, filter client-side by topic2
+// Discovery only — who created what, for whom, how much, over what window.
+// This is immutable creation-time data, safe to reconstruct from the
+// StreamCreated event alone. Current state (released/claimable/cancelled)
+// changes after creation and must come from a live contract read
+// (hooks/useStreamLiveState.ts), never from replaying StreamWithdrawn
+// events — see that hook's header comment for why.
 export async function fetchStreams(userAddress: string): Promise<StreamRecord[]> {
   const paddedSender = padAddress(userAddress);
 
-  const [allCreated, allCancelled, allWithdrawn] = await Promise.all([
-    fetchLogs({ topic0: TOPIC.StreamCreated }),
-    fetchLogs({ topic0: TOPIC.StreamCancelled }),
-    fetchLogs({ topic0: TOPIC.StreamWithdrawn }),
-  ]);
-
+  const allCreated = await fetchLogs({ topic0: TOPIC.StreamCreated });
   // Filter client-side: sender is topic2 for StreamCreated
-  const created   = allCreated.filter(l => l.topics[2]?.toLowerCase() === paddedSender.toLowerCase());
-  // sender is topic2 for StreamCancelled too
-  const cancelled = allCancelled.filter(l => l.topics[2]?.toLowerCase() === paddedSender.toLowerCase());
+  const created = allCreated.filter(l => l.topics[2]?.toLowerCase() === paddedSender.toLowerCase());
 
-  const cancelledIds = new Set(cancelled.map(l => BigInt(l.topics[1]).toString()));
-  const createdIds   = new Set(created.map(l => BigInt(l.topics[1]).toString()));
-  const withdrawnIds = new Set(
-    allWithdrawn
-      .filter(l => createdIds.has(BigInt(l.topics[1]).toString()))
-      .map(l => BigInt(l.topics[1]).toString())
-  );
+  const streams: StreamRecord[] = created.map(l => ({
+    id:        BigInt(l.topics[1]),
+    recipient: "0x" + l.topics[3].slice(26),
+    amount:    hex64(l.data, 0),
+    startTime: hex64(l.data, 1),
+    endTime:   hex64(l.data, 2),
+    txHash:    l.transactionHash,
+  }));
 
-  const order: Record<string, number> = { active: 0, finished: 1, withdrawn: 2, cancelled: 3 };
-  const now = Date.now();
-
-  const streams: StreamRecord[] = created.map(l => {
-    const id        = BigInt(l.topics[1]);
-    const recipient = "0x" + l.topics[3].slice(26);
-    const amount    = hex64(l.data, 0);
-    const startTime = hex64(l.data, 1);
-    const endTime   = hex64(l.data, 2);
-    const idStr     = id.toString();
-
-    let status: StreamRecord["status"] = "active";
-    if      (cancelledIds.has(idStr))  status = "cancelled";
-    else if (withdrawnIds.has(idStr))  status = "withdrawn";
-
-    return { id, recipient, amount, startTime, endTime, txHash: l.transactionHash, status };
-  });
-
-  const getDisplay = (s: StreamRecord) => {
-    if (s.status === "cancelled" || s.status === "withdrawn") return s.status;
-    if (Number(s.endTime) * 1000 < now) return "finished";
-    return "active";
-  };
-
-  return streams.sort((a, b) => {
-    const da = getDisplay(a), db = getDisplay(b);
-    if (da !== db) return order[da] - order[db];
-    return Number(b.id) - Number(a.id);
-  });
+  return streams.sort((a, b) => Number(b.id) - Number(a.id));
 }
 
 // ── Agent activity ────────────────────────────────────────
@@ -235,54 +207,21 @@ export async function fetchAgentActivity(): Promise<AgentActivity[]> {
 export async function fetchReceivedStreams(userAddress: string): Promise<StreamRecord[]> {
   const paddedRecipient = padAddress(userAddress);
 
-  const [allCreated, allCancelled, allWithdrawn] = await Promise.all([
-    fetchLogs({ topic0: TOPIC.StreamCreated }),
-    fetchLogs({ topic0: TOPIC.StreamCancelled }),
-    fetchLogs({ topic0: TOPIC.StreamWithdrawn }),
-  ]);
-
+  const allCreated = await fetchLogs({ topic0: TOPIC.StreamCreated });
   // topics[3] = recipient (indexed) for StreamCreated
   const received = allCreated.filter(l => l.topics[3]?.toLowerCase() === paddedRecipient.toLowerCase());
 
-  const receivedIds = new Set(received.map(l => BigInt(l.topics[1]).toString()));
-  const cancelledIds = new Set(
-    allCancelled.filter(l => receivedIds.has(BigInt(l.topics[1]).toString()))
-      .map(l => BigInt(l.topics[1]).toString())
-  );
-  const withdrawnIds = new Set(
-    allWithdrawn.filter(l => receivedIds.has(BigInt(l.topics[1]).toString()))
-      .map(l => BigInt(l.topics[1]).toString())
-  );
+  const streams: StreamRecord[] = received.map(l => ({
+    id:        BigInt(l.topics[1]),
+    sender:    "0x" + l.topics[2].slice(26),
+    recipient: userAddress,
+    amount:    hex64(l.data, 0),
+    startTime: hex64(l.data, 1),
+    endTime:   hex64(l.data, 2),
+    txHash:    l.transactionHash,
+  }));
 
-  const order: Record<string, number> = { active: 0, finished: 1, withdrawn: 2, cancelled: 3 };
-  const now = Date.now();
-
-  const streams: StreamRecord[] = received.map(l => {
-    const id        = BigInt(l.topics[1]);
-    const sender    = "0x" + l.topics[2].slice(26);
-    const amount    = hex64(l.data, 0);
-    const startTime = hex64(l.data, 1);
-    const endTime   = hex64(l.data, 2);
-    const idStr     = id.toString();
-
-    let status: StreamRecord["status"] = "active";
-    if      (cancelledIds.has(idStr))  status = "cancelled";
-    else if (withdrawnIds.has(idStr))  status = "withdrawn";
-
-    return { id, recipient: userAddress, sender, amount, startTime, endTime, txHash: l.transactionHash, status };
-  });
-
-  const getDisplay = (s: StreamRecord) => {
-    if (s.status === "cancelled" || s.status === "withdrawn") return s.status;
-    if (Number(s.endTime) * 1000 < now) return "finished";
-    return "active";
-  };
-
-  return streams.sort((a, b) => {
-    const da = getDisplay(a), db = getDisplay(b);
-    if (da !== db) return order[da] - order[db];
-    return Number(b.id) - Number(a.id);
-  });
+  return streams.sort((a, b) => Number(b.id) - Number(a.id));
 }
 
 // ── Agent Registry (Phase H3/H5) ────────────────────────────

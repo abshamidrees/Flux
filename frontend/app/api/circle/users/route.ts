@@ -36,6 +36,19 @@ export const runtime = "nodejs";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Circle's SDK does NOT throw a raw axios error — it wraps failures in its
+// own error class that puts the HTTP status directly on the error object
+// (`e.status`), not nested under `.response.status`. Confirmed empirically:
+// a duplicate-user call comes back as `{ status: 409, code: 155101,
+// message: "Existing user already created...", url, method }`, no
+// `.response` property at all. `.response?.status` is kept as a fallback
+// only in case some other SDK call path ever throws a differently-shaped
+// error, not because it's been observed.
+function circleErrorStatus(e: unknown): number | undefined {
+  const err = e as { status?: number; response?: { status?: number } };
+  return err?.status ?? err?.response?.status;
+}
+
 export async function POST(request: Request) {
   let body: { email?: unknown };
   try {
@@ -59,8 +72,7 @@ export async function POST(request: Request) {
     try {
       await client.createUser({ userId });
     } catch (e) {
-      const status = (e as { response?: { status?: number } })?.response?.status;
-      if (status !== 409) throw e;
+      if (circleErrorStatus(e) !== 409) throw e;
     }
 
     const tokenRes = await client.createUserToken({ userId });
@@ -89,8 +101,21 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ userId, userToken, encryptionKey });
   } catch (e) {
-    const detail = (e as { response?: { data?: unknown }; message?: string })?.response?.data
-      ?? (e as Error)?.message ?? "Unknown error";
-    return NextResponse.json({ error: "Circle user setup failed", detail }, { status: 502 });
+    const status = circleErrorStatus(e);
+    const message = (e as Error)?.message ?? "Unknown error";
+    // Full detail always goes server-side (Vercel function logs), regardless
+    // of what the client is shown below.
+    console.error("[circle/users] setup failed", { status, code: (e as { code?: unknown })?.code, message });
+
+    // 401/403, or our own circleClient() "not configured" guard, means
+    // Flux's own API key/env setup is wrong — an operator problem the
+    // caller can't act on, so don't describe it (no env var names, no key
+    // material) beyond the log line above. Anything else is Circle's own
+    // human-authored message, safe to show as-is.
+    const isConfigError = status === 401 || status === 403 || /CIRCLE_API_KEY/.test(message);
+    const userMessage = isConfigError
+      ? "Couldn't reach the wallet service right now. Please try again shortly."
+      : message;
+    return NextResponse.json({ error: userMessage, detail: message }, { status: 502 });
   }
 }
