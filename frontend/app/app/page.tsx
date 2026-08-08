@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useAccount, useReadContract } from "wagmi";
 import { useState, useEffect } from "react";
-import { FLUX_ABI, FLUX_ADDRESS, formatUSDC, explorerLink } from "../../lib/arc";
-import { fetchStreams, fetchBatchHistory, fetchTotalStreamedVolume } from "../../lib/blockchain";
+import { FLUX_ABI, FLUX_ADDRESS, FLUX_AGENT_REGISTRY_ABI, FLUX_AGENT_REGISTRY_ADDRESS, formatUSDC, explorerLink } from "../../lib/arc";
+import { fetchStreams, fetchBatchHistory, fetchTotalStreamedVolume, fetchMyAgents } from "../../lib/blockchain";
 import { Skeleton, Tooltip, EmptyState } from "../../components/UI";
 import { IconBatch, IconStream, IconAgent, IconPlug } from "../../components/icons";
 import { ReactNode } from "react";
@@ -53,6 +53,8 @@ export default function Dashboard() {
   const [myBatchCount,  setMyBatchCount]  = useState<number | null>(null);
   const [myDataLoading, setMyDataLoading] = useState(false);
 
+  const [myAgentCount, setMyAgentCount] = useState<number | null>(null);
+
   useEffect(() => {
     if (!address || !FLUX_ADDRESS) { setMyStreamCount(null); setMyBatchCount(null); return; }
     setMyDataLoading(true);
@@ -60,6 +62,16 @@ export default function Dashboard() {
       fetchStreams(address).then(s => setMyStreamCount(s.length)).catch(() => setMyStreamCount(0)),
       fetchBatchHistory(address).then(b => setMyBatchCount(b.length)).catch(() => setMyBatchCount(0)),
     ]).finally(() => setMyDataLoading(false));
+  }, [address]);
+
+  // Agents live in FluxAgentRegistry (Phase H3+), a separate contract from
+  // FluxSettlement — this used to read FluxSettlement's own getAllAgents(),
+  // the old custodial registry, which never sees anything registered
+  // through the current /agents page. Same event-log fetch the Agents page
+  // itself uses, so the two numbers can never disagree.
+  useEffect(() => {
+    if (!address || !FLUX_AGENT_REGISTRY_ADDRESS) { setMyAgentCount(null); return; }
+    fetchMyAgents(address).then(a => setMyAgentCount(a.length)).catch(() => setMyAgentCount(0));
   }, [address]);
 
   // ── Platform stats ────────────────────────────────────────
@@ -70,14 +82,15 @@ export default function Dashboard() {
   const volume  = stats ? `$${formatUSDC(stats[0])}` : "$0.00";
   const batches = stats ? stats[2].toString() : "0";
   const streams = stats ? stats[3].toString() : "0";
-  const agents  = stats ? stats[4].toString() : "0";
 
-  // ── Agent count from contract ─────────────────────────────
-  const { data: allAgents } = useReadContract({
-    address: FLUX_ADDRESS as `0x${string}`, abi: FLUX_ABI, functionName: "getAllAgents",
-    query: { enabled: !!FLUX_ADDRESS && isConnected },
+  // Same fix as myAgentCount above: total agent count now comes from
+  // FluxAgentRegistry.nextAgentId() (agent IDs are sequential from 0, so
+  // this is a direct all-time count), not FluxSettlement's stale counter.
+  const { data: nextAgentId, isLoading: agentsCountLoading } = useReadContract({
+    address: FLUX_AGENT_REGISTRY_ADDRESS, abi: FLUX_AGENT_REGISTRY_ABI, functionName: "nextAgentId",
+    query: { enabled: !!FLUX_AGENT_REGISTRY_ADDRESS },
   });
-  const myAgentCount = allAgents ? (allAgents as string[]).length : null;
+  const agents = nextAgentId !== undefined ? nextAgentId.toString() : "0";
 
   // Total streamed — protocol-wide, direct from Flux's own StreamCreated
   // events (unfiltered, every stream any address has ever created).
@@ -126,7 +139,7 @@ export default function Dashboard() {
             />
             <StatCard label="Batches"        value={batches} sub="Settlements" loading={statsLoading} tip="Total batch settlement transactions executed." />
             <StatCard label="Streams"        value={streams} sub="Created"     loading={statsLoading} tip="Total payment streams created on this contract." />
-            <StatCard label="Agents"         value={agents}  sub="Registered"  loading={statsLoading} tip="AI agent wallets registered with spending caps." />
+            <StatCard label="Agents"         value={agents}  sub="Registered"  loading={agentsCountLoading} tip="AI agent wallets registered with spending caps." />
           </div>
         </div>
       )}
