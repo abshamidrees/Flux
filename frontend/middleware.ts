@@ -41,6 +41,23 @@ function stripPort(host: string): string {
   return host.split(":")[0];
 }
 
+// A bare top-level request whose last path segment has a dot in it — icon.png,
+// favicon.ico, announcements.json, robots.txt, apple-icon.png, etc. — is
+// never one of this app's own page routes (none of them contain a dot), so
+// it must be a public/ file or a Next.js icon/metadata convention route.
+// Those live at the ROOT (e.g. app/icon.png -> "/icon.png"), so rewriting
+// them under /app or /docs 404s exactly like the /api/* bug below. Confirmed
+// on production: GET app.fluxonarc.xyz/icon.png was 404ing (200 on the
+// apex), which is why the app subdomain showed a generic letter icon
+// instead of the real logo when saved as a browser/OS shortcut. The matcher
+// below already excludes a few of these by name, but that list has to be
+// kept in sync by hand every time a new top-level asset is added — this
+// check is the general, future-proof version of the same fix.
+function looksLikeStaticFile(pathname: string): boolean {
+  const lastSegment = pathname.split("/").pop() || "";
+  return lastSegment.includes(".");
+}
+
 export function middleware(req: NextRequest) {
   const host = req.headers.get("host") || "";
   const hostNoPort = stripPort(host);
@@ -57,7 +74,7 @@ export function middleware(req: NextRequest) {
       url.pathname = pathname.replace(/^\/docs/, "") || "/";
       return NextResponse.redirect(url, 308);
     }
-    if (!pathname.startsWith("/app")) {
+    if (!pathname.startsWith("/app") && !looksLikeStaticFile(pathname)) {
       url.pathname = pathname === "/" ? "/app" : `/app${pathname}`;
       return NextResponse.rewrite(url);
     }
@@ -69,7 +86,7 @@ export function middleware(req: NextRequest) {
       url.pathname = pathname.replace(/^\/app/, "") || "/";
       return NextResponse.redirect(url, 308);
     }
-    if (!pathname.startsWith("/docs")) {
+    if (!pathname.startsWith("/docs") && !looksLikeStaticFile(pathname)) {
       url.pathname = pathname === "/" ? "/docs" : `/docs${pathname}`;
       return NextResponse.rewrite(url);
     }

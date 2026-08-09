@@ -142,10 +142,13 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
   const path = usePathname();
   const { ready } = usePrivy();
   const { address, isConnected, openConnectModal, disconnect } = useWallet();
+  // Live, like the history/activity tabs — the nav balance shouldn't need a
+  // manual refresh or reconnect to reflect a settle/stream/agent payment
+  // that just landed.
   const { data: bal } = useBalance({
     address: address ?? undefined,
     token: USDC_ADDRESS as `0x${string}`,
-    query: { enabled: !!address && !!USDC_ADDRESS },
+    query: { enabled: !!address && !!USDC_ADDRESS, refetchInterval: 1000 },
   });
 
   const displayBalance = bal
