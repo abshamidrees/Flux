@@ -141,7 +141,7 @@ function WalletMenu({ address, balance, onDisconnect }: {
 function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void }) {
   const path = usePathname();
   const { ready } = usePrivy();
-  const { address, isConnected, openConnectModal, disconnect } = useWallet();
+  const { address, isConnected, connectExternal, disconnect } = useWallet();
   // Live, like the history/activity tabs — the nav balance shouldn't need a
   // manual refresh or reconnect to reflect a settle/stream/agent payment
   // that just landed.
@@ -212,17 +212,20 @@ function AppNav({ theme, toggleTheme }: { theme: string; toggleTheme: () => void
           {/* Swap — action, left of the wallet chip (spec §5) */}
           <SwapButton />
 
-          {/* Wallet — reads the unified context (lib/wallet/WalletContext),
-              so this correctly reflects either a Privy or a Circle wallet.
-              !ready still gates on Privy specifically: it's Privy's own
-              "have we finished checking for an existing session" flag, and
-              Circle has no equivalent async-init state to fold in. */}
+          {/* Wallet — reads the unified context (lib/wallet/WalletContext).
+              Goes straight to Privy's own hosted modal via connectExternal
+              (skips Flux's own "Connect to Flux" chooser modal, which only
+              made sense while there were two lanes to pick between — now
+              that Circle's lane is disabled, showing it first was just an
+              extra click to reach the only real option). !ready gates on
+              Privy specifically: it's Privy's own "have we finished checking
+              for an existing session" flag. */}
           {!ready ? (
             <div className="btn btn-ghost btn-sm" style={{ opacity: 0.5, pointerEvents: "none" }}>Loading…</div>
           ) : isConnected && address ? (
             <WalletMenu address={address} balance={displayBalance} onDisconnect={disconnect} />
           ) : (
-            <button onClick={openConnectModal} className="btn btn-primary btn-sm wallet-connect-btn">
+            <button onClick={connectExternal} className="btn btn-primary btn-sm wallet-connect-btn">
               <span className="wallet-connect-full">Connect Wallet</span>
               <span className="wallet-connect-short">Connect</span>
             </button>
