@@ -53,3 +53,36 @@ export function deriveUserIdFromEmail(email: string): string {
   const digest = createHash("sha256").update(normalized).digest("hex").slice(0, 32);
   return `flux-${digest}`;
 }
+
+// ── Shared error handling for Circle SDK calls ──────────────────────────
+// The SDK does NOT throw raw axios errors — it wraps failures in its own
+// error class that puts the HTTP status and Circle's numeric error code
+// directly on the error object (`e.status`, `e.code`), not nested under
+// `.response`. Confirmed empirically against the real sandbox API (e.g. a
+// duplicate-user call: `{ status: 409, code: 155101, message }`, no
+// `.response` at all). `.response?.status` is kept as a fallback only in
+// case some call path ever throws a differently-shaped error.
+export function circleErrorStatus(e: unknown): number | undefined {
+  const err = e as { status?: number; response?: { status?: number } };
+  return err?.status ?? err?.response?.status;
+}
+
+export function circleErrorCode(e: unknown): number | undefined {
+  return (e as { code?: number })?.code;
+}
+
+// Always logs full detail server-side, then returns a message safe to hand
+// to the client: Circle's own error messages are human-authored and don't
+// contain secrets, so they're shown as-is — EXCEPT 401/403 or our own
+// circleClient() "not configured" guard, which mean Flux's own API key/env
+// setup is wrong (an operator problem the caller can't act on), so those
+// get a generic message instead of leaking env var names or auth details.
+export function safeCircleErrorMessage(e: unknown, logTag: string): string {
+  const status = circleErrorStatus(e);
+  const code = circleErrorCode(e);
+  const message = (e as Error)?.message ?? "Unknown error";
+  console.error(`[${logTag}] Circle request failed`, { status, code, message });
+
+  const isConfigError = status === 401 || status === 403 || /CIRCLE_API_KEY/.test(message);
+  return isConfigError ? "Couldn't reach the wallet service right now. Please try again shortly." : message;
+}

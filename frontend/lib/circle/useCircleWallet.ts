@@ -62,6 +62,23 @@ export function useCircleWallet() {
         "Failed to set up your Circle account",
       );
 
+      // Returning-user fast path: if a wallet already exists for this
+      // account (e.g. from an earlier session), use it directly — no PIN
+      // entry needed. Listing wallets is a metadata read, not a signing
+      // action, so it needs no challenge. This also sidesteps a Circle SDK
+      // rejection: createUserPinWithWallets always fails a user who already
+      // has a PIN with "already initialized" (code 155106) — exactly what
+      // every returning user has, which is what a fresh challenge attempt
+      // here would otherwise hit every single time.
+      setStatus("resolving-wallet");
+      const existing = await jsonOrThrow(await fetch("/api/circle/wallets"), "Failed to check for an existing wallet");
+      const existingWallet = existing.wallets?.[0];
+      if (existingWallet?.address) {
+        setWallet({ id: existingWallet.id, address: existingWallet.address as `0x${string}` });
+        setStatus("connected");
+        return;
+      }
+
       const appId = process.env.NEXT_PUBLIC_CIRCLE_APP_ID;
       if (!appId) throw new Error("Circle is not configured (NEXT_PUBLIC_CIRCLE_APP_ID missing)");
 
